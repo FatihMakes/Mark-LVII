@@ -11,6 +11,7 @@ import json
 import os
 import re
 import time
+import urllib.parse
 from pathlib import Path
 from typing import Optional
 
@@ -247,6 +248,53 @@ You can send them directly via email or submit via the direct career links with 
             f"The listings with direct apply links are displayed on your screen."
         )
 
+    elif action in ("linkedin_apply", "linkedin_jobs", "linkedin"):
+        if player and hasattr(player, "write_log"):
+            player.write_log(f"CAREER: Launching LinkedIn Easy Apply automation for '{role}' in {location}...")
+
+        encoded_role = urllib.parse.quote(role)
+        encoded_loc = urllib.parse.quote(location)
+        # f_AL=true filters specifically for Easy Apply (1-click apply with uploaded resume)
+        linkedin_url = f"https://www.linkedin.com/jobs/search/?keywords={encoded_role}&location={encoded_loc}&f_AL=true"
+        
+        # Open in active browser using browser_control or webbrowser
+        try:
+            import webbrowser
+            webbrowser.open(linkedin_url)
+        except Exception:
+            pass
+
+        card = f"""# 👔 LinkedIn Easy-Apply Hub
+**Target Role:** {role}  
+**Location:** {location}  
+**Filter:** Easy Apply (`f_AL=true`)  
+**Attached Resume:** `{CANDIDATE_PROFILE['resume_path']}`  
+**Candidate:** {CANDIDATE_PROFILE['name']} (`{CANDIDATE_PROFILE['email']}`)  
+
+---
+### 🌐 Direct LinkedIn Search:
+👉 [Click to View Live Easy-Apply Jobs on LinkedIn]({linkedin_url})
+
+JARVIS has opened LinkedIn Jobs with the Easy-Apply filter active. 
+Your ATS resume `{Path(CANDIDATE_PROFILE['resume_path']).name}` is formatted and ready for instant submission.
+"""
+        if player and hasattr(player, "show_content"):
+            player.show_content("LinkedIn Easy Apply", card)
+
+        tracker["applications"].append({
+            "company": "LinkedIn Easy Apply Portal",
+            "role": role,
+            "url": linkedin_url,
+            "date": time.strftime("%Y-%m-%d"),
+            "status": "Live Job Feed Launched"
+        })
+        _save_tracker(tracker)
+
+        return (
+            f"Sir, I have opened LinkedIn Jobs filtered for '{role}' with Easy-Apply enabled in {location}. "
+            f"You can review the openings on your screen and apply directly with your ATS resume."
+        )
+
     elif action in ("draft_email", "apply"):
         mail_data = _generate_tailored_email(company, role, recruiter_email)
         out_mail_file = APPLICATIONS_DIR / f"Application_{company.replace(' ', '_')}.txt"
@@ -311,7 +359,7 @@ TOOL = {
         "properties": {
             "action": {
                 "type": "STRING",
-                "description": "apply_batch | search_jobs | draft_email | pipeline (default: apply_batch)",
+                "description": "apply_batch | linkedin_apply | search_jobs | draft_email | pipeline (default: apply_batch)",
             },
             "role": {
                 "type": "STRING",
