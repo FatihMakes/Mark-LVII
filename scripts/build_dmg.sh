@@ -19,7 +19,12 @@ mkdir -p "$APP_DIR/Contents/MacOS"
 mkdir -p "$APP_DIR/Contents/Resources"
 mkdir -p "$DMG_ROOT"
 
-# Create Info.plist
+# Copy Icon
+if [ -f "$DIR/config/AppIcon.icns" ]; then
+    cp "$DIR/config/AppIcon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
+fi
+
+# Create Info.plist with proper Icon and metadata
 cat <<EOF > "$APP_DIR/Contents/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -27,6 +32,8 @@ cat <<EOF > "$APP_DIR/Contents/Info.plist"
 <dict>
     <key>CFBundleExecutable</key>
     <string>Jarvis</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>com.fatihmakes.jarvis</string>
     <key>CFBundleName</key>
@@ -52,7 +59,6 @@ EOF
 # Create Launcher executable inside Contents/MacOS/Jarvis
 cat <<'EOF' > "$APP_DIR/Contents/MacOS/Jarvis"
 #!/usr/bin/env bash
-APP_BUNDLE="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../../.." && pwd )"
 REPO_DIR="$HOME/Downloads/Jarvise"
 
 if [ ! -d "$REPO_DIR" ]; then
@@ -70,6 +76,11 @@ EOF
 
 chmod +x "$APP_DIR/Contents/MacOS/Jarvis"
 
+# Install directly to /Applications so there is only one official app bundle
+echo "📲 Updating /Applications/Jarvis.app..."
+rm -rf "/Applications/Jarvis.app"
+cp -R "$APP_DIR" "/Applications/Jarvis.app"
+
 # Copy App to DMG root
 cp -R "$APP_DIR" "$DMG_ROOT/"
 
@@ -77,7 +88,12 @@ cp -R "$APP_DIR" "$DMG_ROOT/"
 ln -s /Applications "$DMG_ROOT/Applications"
 
 echo "💿 Creating DMG Disk Image at: $OUTPUT_DMG..."
+rm -f "$OUTPUT_DMG"
 hdiutil create -volname "JARVIS Mark-LVII" -srcfolder "$DMG_ROOT" -ov -format UDZO "$OUTPUT_DMG"
 
-echo "✅ DMG Installer successfully generated at: $OUTPUT_DMG"
-echo "You can double click '$OUTPUT_DMG' and drag JARVIS into Applications to install!"
+# Clean up build directory so macOS Spotlight does not index temporary build duplicates
+echo "🧹 Cleaning up intermediate build directory to prevent duplicate Spotlight entries..."
+rm -rf "$BUILD_DIR"
+
+echo "✅ Official JARVIS App installed to /Applications/Jarvis.app"
+echo "✅ DMG Installer ready at: $OUTPUT_DMG"

@@ -140,6 +140,30 @@ def _ddg_search(query: str, max_results: int = 6) -> list[dict]:
                 })
     except Exception as e:
         print(f"[WebSearch] ⚠️ DDG text() failed: {e}")
+
+    # Fallback to direct HTML scrape if DDGS returned nothing
+    if not results:
+        try:
+            import requests
+            from bs4 import BeautifulSoup
+            headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+            resp = requests.post("https://html.duckduckgo.com/html/", data={"q": query}, headers=headers, timeout=8)
+            soup = BeautifulSoup(resp.text, "html.parser")
+            for div in soup.select(".web-result"):
+                t = div.select_one(".result__title")
+                s = div.select_one(".result__snippet")
+                u = div.select_one(".result__url")
+                if t and s:
+                    results.append({
+                        "title": t.get_text(strip=True),
+                        "snippet": s.get_text(strip=True),
+                        "url": u.get_text(strip=True) if u else "",
+                    })
+                    if len(results) >= max_results:
+                        break
+        except Exception as e:
+            print(f"[WebSearch] ⚠️ HTML scrape fallback failed: {e}")
+
     return results
 
 
