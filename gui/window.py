@@ -1640,6 +1640,7 @@ class MainWindow(QMainWindow):
             lay.addWidget(b)
             return b
 
+        _btn("🔑  GEMINI API KEY", self._show_setup, self._BTN_PRI)
         _btn("◉  REMOTE CONTROL", self._open_remote, self._BTN_PRI)
         _btn("⊞  CREATE DESKTOP SHORTCUT", self._create_desktop_shortcut)
         self._autostart_btn = _btn("◉  AUTO-START: OFF", self._toggle_autostart)
@@ -2914,22 +2915,32 @@ class MainWindow(QMainWindow):
         d = _read_full_config()
         if not d.get("os_system"):
             return False
+        key = str(d.get("gemini_api_key") or "").strip()
+        if not key and not d.get("local_only"):
+            return False
         providers = d.get("providers") if isinstance(d.get("providers"), dict) else {}
         # A Gemini key, or a choice to run without one: a local engine needs no key.
-        return bool(d.get("gemini_api_key") or d.get("local_only")
+        return bool(key or d.get("local_only")
                     or str(providers.get("mode") or "").lower() == "pipeline")
 
     def _show_setup(self):
+        if getattr(self, "_overlay", None) is not None:
+            self._overlay.raise_()
+            self._overlay.show()
+            return
         ov = SetupOverlay(self.centralWidget())
         cw = self.centralWidget()
         ow, oh = 460, 440
+        w_avail = max(ow, cw.width())
+        h_avail = max(oh, cw.height())
         ov.setGeometry(
-            (cw.width()  - ow) // 2,
-            (cw.height() - oh) // 2,
+            (w_avail - ow) // 2,
+            (h_avail - oh) // 2,
             ow, oh,
         )
         ov.done.connect(self._on_setup_done)
         ov.show()
+        ov.raise_()
         self._overlay = ov
 
     def _on_setup_done(self, key: str, os_name: str):

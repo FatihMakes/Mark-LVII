@@ -2843,7 +2843,7 @@ class JarvisLive:
                     else:
                         self._awake = True
                         self.ui.set_state("LISTENING")
-                        self.ui.write_log("SYS: JARVIS online.")
+                        self.ui.write_log("SYS: JARVIS Mark-LVII Enterprise online. Contributed by Aman Kumar (@iamTechieAman).")
 
                     # What this machine will not permit, said once, on screen.
                     #
