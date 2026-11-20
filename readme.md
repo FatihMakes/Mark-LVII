@@ -1031,6 +1031,19 @@ Your voice is streamed to Google's Gemini Live API while a session is open; that
 
 ---
 
+## 👥 Contributors & Core Maintainers
+
+This project is built and maintained through active open-source collaboration:
+
+| Contributor | Role & Major Contributions | Profile |
+|:---|:---|:---|
+| **FatihMakes** | Original Creator & Lead Architect of Mark-LVII Assistant | [@FatihMakes](https://github.com/FatihMakes) |
+| **Aman Kumar** | Enterprise Suite Contributor & Maintainer (Local Ollama Engine, Cyber Security Suite, Telephony, Adaptive Identity, REA Toolkit, AI Trading Engine, Document Studio, macOS Packaging) | [@iamTechieAman](https://github.com/iamTechieAman) |
+
+See [`CONTRIBUTORS.md`](CONTRIBUTORS.md) for full contribution details.
+
+---
+
 ## ⚠️ License
 
 Personal and non-commercial use only.
@@ -1038,12 +1051,13 @@ Licensed under **[Creative Commons BY-NC 4.0](https://creativecommons.org/licens
 
 ---
 
-## 👤 Connect with the Creator
+## 👤 Connect with the Creators
 
-Engineered by a developer building a real-world JARVIS-style assistant.
+Engineered by developers building a real-world JARVIS-style assistant.
 ⭐ **Star the repository to support the journey to Mark 100.**
 
 | Platform | Link |
 | --- | --- |
-| YouTube | [@FatihMakes](https://www.youtube.com/@FatihMakes) |
-| Instagram | [@fatihmakes](https://www.instagram.com/fatihmakes) |
+| FatihMakes (YouTube) | [@FatihMakes](https://www.youtube.com/@FatihMakes) |
+| FatihMakes (Instagram) | [@fatihmakes](https://www.instagram.com/fatihmakes) |
+| Aman Kumar (GitHub) | [@iamTechieAman](https://github.com/iamTechieAman) |
