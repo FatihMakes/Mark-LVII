@@ -186,6 +186,24 @@ def _ddg_news(query: str, max_results: int = 8) -> list[dict]:
     # instead of raising.
     if not results:
         results = _ddg_search(query, max_results=max_results)
+
+    # Secondary fallback to Google News RSS if search returned nothing
+    if not results:
+        try:
+            import requests
+            import xml.etree.ElementTree as ET
+            import urllib.parse
+            rss_url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=en-US&gl=US&ceid=US:en" if query else "https://news.google.com/rss"
+            r = requests.get(rss_url, timeout=5)
+            if r.status_code == 200:
+                root = ET.fromstring(r.content)
+                for item in root.findall(".//item")[:max_results]:
+                    title = item.find("title").text if item.find("title") is not None else ""
+                    link = item.find("link").text if item.find("link") is not None else ""
+                    results.append({"title": title, "snippet": title, "url": link, "source": "Google News"})
+        except Exception as e:
+            print(f"[WebSearch] ⚠️ RSS news fallback failed: {e}")
+
     return results
 
 
