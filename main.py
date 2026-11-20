@@ -53,6 +53,7 @@ import traceback
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
+from collections import deque
 
 import sounddevice as sd
 import numpy as np
@@ -757,6 +758,7 @@ class JarvisLive:
         self._awake            = not self._wake_enabled
         self._wake_detector: WakeWordDetector | None = None
         self._wake_sleep_timeout = WAKE_SLEEP_TIMEOUT
+        self._voice_match_buf    = deque(maxlen=16)
 
         # Restore the saved push-to-talk preference. Doing it here rather than
         # in __init__ means the hotkey thread only exists once there is a
@@ -1851,14 +1853,19 @@ class JarvisLive:
                 return
 
             # ── Voice Match / Speaker Verification gate ─────────────────────
-            # When Voice Match is enabled, reject incoming frames that do not match the owner.
+            # When Voice Match is enabled and calibrated, verify speech over a stable window
+            # without dropping individual micro-frames.
             if voice_verifier.is_voice_match_enabled():
                 try:
                     lvl = _pcm_level(indata)
-                    if lvl > 0.03:
-                        match, score, _ = voice_verifier.verify_speaker(indata, SEND_SAMPLE_RATE)
-                        if not match:
-                            return
+                    if lvl > 0.05:
+                        self._voice_match_buf.append(indata.copy())
+                        if len(self._voice_match_buf) >= 8:
+                            full_speech = np.concatenate(list(self._voice_match_buf))
+                            match, score, _ = voice_verifier.verify_speaker(full_speech, SEND_SAMPLE_RATE)
+                            self._voice_match_buf.popleft()
+                            if not match and score < 0.40:
+                                return
                 except Exception:
                     pass
 
