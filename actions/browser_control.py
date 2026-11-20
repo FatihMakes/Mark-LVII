@@ -1051,6 +1051,56 @@ class _BrowserSession:
         except Exception as e:
             return f"Reload error: {e}"
 
+    async def inspect_page(self) -> str:
+        """Antigravity-style deep page inspection: extracts title, text, buttons, links, and forms."""
+        page = await self._get_page()
+        try:
+            title = await page.title()
+            url = page.url
+            body_text = (await page.inner_text("body"))[:2500]
+
+            elements = []
+            buttons = await page.locator("button, [role='button'], input[type='submit'], input[type='button']").all()
+            for b in buttons[:10]:
+                try:
+                    txt = (await b.inner_text()).strip() or (await b.get_attribute("value") or "").strip()
+                    if txt:
+                        elements.append(f"• [Button] \"{txt[:40]}\"")
+                except Exception:
+                    pass
+
+            inputs = await page.locator("input[type='text'], input[type='search'], input[type='email'], input[type='password'], textarea").all()
+            for inp in inputs[:10]:
+                try:
+                    ph = (await inp.get_attribute("placeholder") or "").strip()
+                    aria = (await inp.get_attribute("aria-label") or "").strip()
+                    name = ph or aria or "Text Input"
+                    elements.append(f"• [Input] \"{name[:40]}\"")
+                except Exception:
+                    pass
+
+            links = await page.locator("a[href]").all()
+            for a in links[:10]:
+                try:
+                    ltxt = (await a.inner_text()).strip()
+                    href = (await a.get_attribute("href") or "").strip()
+                    if ltxt and len(ltxt) > 1 and not href.startswith("javascript:"):
+                        elements.append(f"• [Link] \"{ltxt[:40]}\" → {href[:60]}")
+                except Exception:
+                    pass
+
+            elems_md = "\n".join(elements) if elements else "• No prominent buttons or inputs detected."
+            return (
+                f"# 🌐 {title}\n"
+                f"**URL:** [{url}]({url})\n\n"
+                f"### 📄 Page Content Preview:\n"
+                f"```\n{body_text}\n```\n\n"
+                f"### 🔘 Interactive Controls Detected:\n"
+                f"{elems_md}"
+            )
+        except Exception as e:
+            return f"Error inspecting page: {e}"
+
     async def close_browser(self) -> str:
         await self._async_close()
         return f"{self.browser_name} closed."
@@ -1214,7 +1264,7 @@ def browser_control(
     # user had opened it themselves. A controlled window with about:blank never
     # opens here. The only exception: if an automation flow is already running,
     # navigation continues in that window (so multi-step tasks aren't split).
-    if action in ("go_to", "search", "new_tab"):
+    if action in ("go_to", "search", "new_tab") and not params.get("controlled"):
         if _registry.has(browser):
             sess = _registry.get(browser)
             try:
@@ -1268,7 +1318,17 @@ def browser_control(
             except Exception as e:
                 print(f"[Browser] Could not resume last page ({last}): {e}")
 
-        if action == "click":
+        elif action in ("browse", "inspect", "inspect_page"):
+            target_url = params.get("url")
+            if target_url:
+                sess.run(sess.go_to(target_url))
+            result = sess.run(sess.inspect_page())
+            if player and hasattr(player, "show_content"):
+                try:
+                    player.show_content("Web Browser (Antigravity Mode)", result)
+                except Exception:
+                    pass
+        elif action == "click":
             result = sess.run(sess.click(params.get("selector"), params.get("text")))
         elif action == "type":
             result = sess.run(sess.type_text(
@@ -1365,7 +1425,7 @@ TOOL = {
         "properties": {
             "action": {
                 "type": "STRING",
-                "description": "go_to | search | click | type | scroll | fill_form | smart_click | smart_type | get_text | get_url | press | new_tab | close_tab | screenshot | back | forward | reload | switch | list_browsers | close | close_all"
+                "description": "browse | inspect_page | go_to | search | smart_click | smart_type | click | type | scroll | fill_form | get_text | get_url | press | new_tab | close_tab | screenshot | back | forward | reload | switch | list_browsers | close | close_all"
             },
             "browser": {
                 "type": "STRING",
