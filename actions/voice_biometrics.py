@@ -69,12 +69,23 @@ def voice_biometrics(parameters: dict, player=None, session_memory=None) -> str:
         return "Voice Match verification has been paused, sir. I will respond to all voice inputs."
 
     elif action in ("enroll", "calibrate"):
-        # Auto-calibrate voiceprint from recent audio buffer or live mic
+        # Real microphone voice calibration for Aman Kumar
         import numpy as np
-        # Synthesize calibration profile for Aman Kumar
-        audio_dummy = np.random.randn(16000 * 2).astype(np.float32)
-        res = voice_verifier.enroll_owner_voice(audio_dummy, owner)
-        voice_verifier.set_voice_match_enabled(True)
+        try:
+            import sounddevice as sd
+            duration = 3.0
+            sr = 16000
+            if player and hasattr(player, "write_log"):
+                player.write_log("BIOMETRICS: Recording 3 seconds for voice calibration...")
+            recording = sd.rec(int(duration * sr), samplerate=sr, channels=1, dtype="float32")
+            sd.wait()
+            audio_data = recording.flatten()
+            rms = float(np.sqrt(np.mean(audio_data ** 2)))
+            if rms < 0.005:
+                return "The microphone recording was quiet during calibration. Please speak clearly into the microphone and say 'Calibrate my voice' again."
+            res = voice_verifier.enroll_owner_voice(audio_data, owner, sample_rate=sr)
+        except Exception as e:
+            return f"Voice calibration encountered an issue: {e}. Please ensure microphone access is active."
 
         card = f"""# ✅ Voice ID Enrolled: {owner}
 **Status:** Calibrated & Locked  

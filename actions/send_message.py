@@ -179,21 +179,17 @@ def _send_whatsapp(receiver: str, message: str) -> str:
 
     if os_name == "mac":
         try:
-            # Reopen WhatsApp window if closed/hidden
-            subprocess.run(["osascript", "-e", 'tell application "WhatsApp" to reopen\ntell application "WhatsApp" to activate'], timeout=5)
-            time.sleep(0.5)
-
             if is_phone:
                 encoded_msg = urllib.parse.quote(message)
                 url = f"whatsapp://send?phone={digits_only}&text={encoded_msg}"
                 subprocess.run(["open", url], timeout=5)
-                time.sleep(2.0)
+                time.sleep(1.5)
                 # Press Return to send pre-filled message
                 subprocess.run(["osascript", "-e", '''
                     tell application "WhatsApp" to activate
                     delay 0.4
                     tell application "System Events"
-                        tell process "WhatsApp"
+                        tell application process "WhatsApp"
                             key code 36 -- Return
                         end tell
                     end tell
@@ -201,53 +197,70 @@ def _send_whatsapp(receiver: str, message: str) -> str:
                 return outcome.done("send_message", platform="WhatsApp", to=receiver, verified=True)
 
             # Contact name (e.g. Mummy, Papa, Harshita)
-            # Dismiss search / modals with Escape, trigger New Chat (Cmd+N)
-            script = f'''
-            set the clipboard to "{clean_receiver}"
-            tell application "WhatsApp" to reopen
+            # 1. Bring window forward safely via Window menu
+            subprocess.run(['osascript', '-e', '''
             tell application "WhatsApp" to activate
-            delay 0.4
             tell application "System Events"
-                tell process "WhatsApp"
-                    -- Dismiss any previous active search
-                    key code 53 -- Escape
-                    delay 0.2
-                    key code 53 -- Escape
-                    delay 0.2
-                    -- Open New Chat
-                    keystroke "n" using command down
-                    delay 0.6
-                    -- Paste contact name
-                    keystroke "v" using command down
-                    delay 0.8
-                    -- Move down to highlight first matched contact
-                    key code 125 -- Down arrow
-                    delay 0.4
-                    -- Open chat
-                    key code 36 -- Return
-                    delay 0.8
+                tell application process "WhatsApp"
+                    try
+                        click (last menu item of menu 1 of menu bar item "Window" of menu bar 1)
+                    end try
                 end tell
             end tell
-            '''
-            subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=10)
+            '''], timeout=5)
+            time.sleep(0.5)
 
-            # Paste message and send
-            msg_script = f'''
-            set the clipboard to {json.dumps(message)}
-            tell application "WhatsApp" to activate
-            delay 0.3
-            tell application "System Events"
-                tell process "WhatsApp"
-                    keystroke "v" using command down
-                    delay 0.4
-                    key code 36 -- Return to send!
-                    delay 0.3
-                end tell
-            end tell
-            '''
-            res = subprocess.run(["osascript", "-e", msg_script], capture_output=True, text=True, timeout=10)
-            if res.returncode == 0:
-                return outcome.done("send_message", platform="WhatsApp", to=receiver, verified=True)
+            _require_pyautogui()
+            # 2. Escape twice to dismiss any lingering search/dialog
+            pyautogui.press('escape')
+            time.sleep(0.2)
+            pyautogui.press('escape')
+            time.sleep(0.3)
+
+            # 3. Search contact in main search (Cmd+F)
+            pyautogui.hotkey('command', 'f')
+            time.sleep(0.3)
+            pyautogui.hotkey('command', 'a')
+            pyautogui.press('delete')
+            time.sleep(0.1)
+
+            # Type contact name
+            pyautogui.write(clean_receiver, interval=0.03)
+            time.sleep(0.6)
+
+            # 4. Highlight matched contact and open chat
+            pyautogui.press('down')
+            time.sleep(0.3)
+            pyautogui.press('enter')
+            time.sleep(0.6)
+
+            # 5. Focus message composer directly via window bounds
+            cx, cy = 670, 915
+            try:
+                import Quartz
+                windowList = Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionAll, Quartz.kCGNullWindowID)
+                for w in windowList:
+                    if 'WhatsApp' in w.get('kCGWindowOwnerName', ''):
+                        b = w.get('kCGWindowBounds', {})
+                        if b.get('Height', 0) > 500:
+                            cx = int(b['X']) + int(b['Width'] * 0.65)
+                            cy = int(b['Y']) + int(b['Height']) - 45
+                            break
+            except Exception:
+                pass
+
+            pyautogui.click(cx, cy)
+            time.sleep(0.3)
+
+            # 6. Paste message
+            _paste_text(message)
+            time.sleep(0.3)
+
+            # 7. Press Return to send
+            pyautogui.press('enter')
+            time.sleep(0.3)
+
+            return outcome.done("send_message", platform="WhatsApp", to=receiver, verified=True)
         except Exception as e:
             print(f"[SendMessage] macOS WhatsApp automation note: {e}")
 
