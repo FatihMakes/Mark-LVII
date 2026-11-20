@@ -1245,6 +1245,8 @@ class MainWindow(QMainWindow):
                     f"*Indexed into JARVIS working context. Say 'Analyze this folder' or ask questions about its code or data.*"
                 )
                 self._content_sig.emit(f"Folder: {p.name}/", report)
+                if hasattr(self, 'on_text_command') and callable(self.on_text_command):
+                    self.on_text_command(f"SYS_CONTEXT: The user uploaded folder '{p.name}/' at '{p}' with {len(entries)} items: {', '.join(e.name for e in entries[:15])}")
             except Exception as e:
                 self._content_sig.emit(f"Folder: {p.name}", f"**Location:** `{p}`\n\nReady for processing.")
         elif p.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"):
@@ -1258,6 +1260,8 @@ class MainWindow(QMainWindow):
                 f"Ask JARVIS: *'What is in this image?'* or *'Explain this diagram'*."
             )
             self._content_sig.emit(f"Image: {p.name}", report)
+            if hasattr(self, 'on_text_command') and callable(self.on_text_command):
+                self.on_text_command(f"SYS_CONTEXT: The user uploaded image '{p.name}' at '{p}'. Ready for visual analysis.")
         else:
             self._log_sig.emit(f"SYS: File uploaded: {p.name}")
             try:
@@ -1275,6 +1279,8 @@ class MainWindow(QMainWindow):
                         f"*Ready for deep summarization, question answering, rewriting, or editing.*"
                     )
                     self._content_sig.emit(f"Document: {p.name}", report)
+                    if hasattr(self, 'on_text_command') and callable(self.on_text_command):
+                        self.on_text_command(f"SYS_CONTEXT: The user uploaded document '{p.name}' at '{p}'. Content:\n{txt[:2500]}")
                 else:
                     self._content_sig.emit(f"File: {p.name}", f"**Location:** `{p}`\n\nIndexed and ready for processing.")
             except Exception:

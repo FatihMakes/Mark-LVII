@@ -96,6 +96,7 @@ from core.viseme               import VisemeStream
 from core.wake_word            import (
     WakeWordDetector, is_ready as wake_is_ready, install_and_download as wake_install,
 )
+from core                      import voice_verifier
 
 # How long the assistant stays awake with no user speech before it auto-sleeps
 # again (wake-word mode only).
@@ -1848,7 +1849,19 @@ class JarvisLive:
             # unless you are holding the key.
             if self._ptt_enabled and not self._ptt_held:
                 return
-            
+
+            # ── Voice Match / Speaker Verification gate ─────────────────────
+            # When Voice Match is enabled, reject incoming frames that do not match the owner.
+            if voice_verifier.is_voice_match_enabled():
+                try:
+                    lvl = _pcm_level(indata)
+                    if lvl > 0.03:
+                        match, score, _ = voice_verifier.verify_speaker(indata, SEND_SAMPLE_RATE)
+                        if not match:
+                            return
+                except Exception:
+                    pass
+
             if not self.ui.muted and not self._phone_active:
                 data = indata.tobytes()
                 loop.call_soon_threadsafe(

@@ -122,6 +122,29 @@ def concierge_service(parameters: dict, player=None, session_memory=None) -> str
 
         return f"Upcoming live events, concerts, and comedy shows for {city} are displayed on your HUD, sir."
 
+    elif action in ("stream_free_movie", "free_movie", "public_domain_movie", "watch_movie"):
+        archive_url = f"https://archive.org/details/feature_films?and[]={urllib.parse.quote(movie)}"
+        yt_movie_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote(movie + ' full movie free')}"
+        
+        try:
+            import webbrowser
+            webbrowser.open(yt_movie_url)
+        except Exception:
+            pass
+
+        card = f"""# 🎥 Free & Public Streaming Concierge: {movie or 'Feature Films'}
+**Search Target:** `{movie}`  
+
+### 🎬 Available Free & Legal Streaming Streams:
+- **YouTube Free Full Movies:** [Watch on YouTube]({yt_movie_url})
+- **Internet Archive Open Cinema:** [Search 20,000+ Free Classic & Independent Movies]({archive_url})
+- **Public Domain Films:** Direct streaming initiated in your browser.
+"""
+        if player and hasattr(player, "show_content"):
+            player.show_content("Free Movies Concierge", card)
+
+        return f"I have opened the free full movie stream for '{movie}' on YouTube and Internet Archive, sir."
+
     elif action in ("dining", "restaurant", "table"):
         zomato_url = f"https://www.zomato.com/{city_slug}/dine-out"
         swiggy_url = f"https://www.swiggy.com/dineout/{city_slug}"
