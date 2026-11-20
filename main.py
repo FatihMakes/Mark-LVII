@@ -2602,26 +2602,7 @@ class JarvisLive:
         reported while there is still a Gemini session to fall back to.
         """
         if self._engine_mode() != "pipeline":
-            if _gemini_usable():
-                return None
-            # Offline / No Gemini Key: auto-detect and switch to local Ollama if available
-            try:
-                import urllib.request, json
-                req = urllib.request.Request("http://127.0.0.1:11434/api/tags")
-                with urllib.request.urlopen(req, timeout=1.0) as resp:
-                    tags = json.loads(resp.read().decode("utf-8"))
-                    models = [m.get("name") for m in tags.get("models", [])]
-                    if models:
-                        from memory.config_manager import save_provider_mode, save_pipeline, save_provider_config
-                        save_provider_mode("pipeline")
-                        save_pipeline(stt="", llm="openai_compat@ollama", tts="system_tts")
-                        save_provider_config("openai_compat@ollama", {
-                            "base_url": "http://127.0.0.1:11434/v1",
-                            "model": models[0],
-                            "api_key": "ollama",
-                        })
-            except Exception:
-                return None
+            return None
         try:
             from memory.config_manager import get_pipeline, get_provider_config
             from providers import registry
@@ -2777,12 +2758,10 @@ class JarvisLive:
                 # below behaves any differently.
                 self._engine_caps = self._resolve_engine_caps()
                 if self._engine_caps is None and not _gemini_usable():
-                    # Neither Gemini key nor local model is ready
                     if not getattr(self, "_no_engine_said", False):
                         self._no_engine_said = True
                         self.ui.write_log(
-                            "SYS: Offline Standby — add a free Gemini API key to config/api_keys.json, "
-                            "or run 'ollama pull llama3.2' for 100% free offline mode.")
+                            "SYS: Gemini API key required — add your free key in config/api_keys.json or Settings (⚙).")
                     self.ui.set_state("STANDBY")
                     await asyncio.sleep(5)
                     continue
