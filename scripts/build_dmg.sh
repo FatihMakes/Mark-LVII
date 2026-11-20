@@ -91,6 +91,11 @@ echo "💿 Creating DMG Disk Image at: $OUTPUT_DMG..."
 rm -f "$OUTPUT_DMG"
 hdiutil create -volname "JARVIS Mark-LVII" -srcfolder "$DMG_ROOT" -ov -format UDZO "$OUTPUT_DMG"
 
+# Eject any transient mounted volumes from creation
+hdiutil info | grep "/Volumes/JARVIS" | awk '{print $1}' | while read -r dev; do
+    hdiutil detach "$dev" -force 2>/dev/null || true
+done
+
 # Clean up build directory so macOS Spotlight does not index temporary build duplicates
 echo "🧹 Cleaning up intermediate build directory to prevent duplicate Spotlight entries..."
 rm -rf "$BUILD_DIR"
