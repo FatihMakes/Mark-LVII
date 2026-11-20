@@ -84,13 +84,19 @@ class SetupOverlay(QWidget):
         sep.setStyleSheet(f"color: {C.BORDER};"); layout.addWidget(sep)
         layout.addSpacing(4)
 
-        layout.addWidget(_lbl("GEMINI API KEY", 8, color=C.TEXT_DIM,
+        layout.addWidget(_lbl("GEMINI API KEY(S) — enter 1 or multiple separated by commas for auto-rotation", 8, color=C.TEXT_DIM,
                                align=Qt.AlignmentFlag.AlignLeft))
         self._key_input = QLineEdit()
-        self._key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self._key_input.setPlaceholderText("AIza…")
-        self._key_input.setFont(hud_font(10))
+        self._key_input.setPlaceholderText("AIzaSy... , AIzaSy... (comma-separated for auto-rotation)")
+        self._key_input.setFont(hud_font(9))
         self._key_input.setFixedHeight(32)
+        try:
+            from memory.config_manager import get_gemini_keys
+            existing_keys = get_gemini_keys()
+            if existing_keys:
+                self._key_input.setText(", ".join(existing_keys))
+        except Exception:
+            pass
         self._key_input.setStyleSheet(f"""
             QLineEdit {{
                 background: #000d12; color: {C.TEXT};

@@ -3094,7 +3094,9 @@ class MainWindow(QMainWindow):
         from memory.config_manager import update_config
         fields = {"os_system": os_name, "local_only": not key}
         if key:
-            fields["gemini_api_key"] = key
+            raw_keys = [k.strip() for k in key.replace("\n", ",").split(",") if k.strip()]
+            fields["gemini_api_key"] = raw_keys[0] if raw_keys else key.strip()
+            fields["gemini_api_keys"] = raw_keys
         update_config(**fields)
         try:
             from core import gemini as _gemini
