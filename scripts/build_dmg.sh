@@ -66,20 +66,24 @@ if [ ! -d "$REPO_DIR" ]; then
 fi
 
 cd "$REPO_DIR"
+LOG_FILE="$HOME/.jarvis_app.log"
+echo "=== JARVIS Launch $(date) ===" >> "$LOG_FILE"
 
 if [ -f "$REPO_DIR/.venv/bin/python" ]; then
-    exec "$REPO_DIR/.venv/bin/python" main.py
+    exec "$REPO_DIR/.venv/bin/python" main.py >> "$LOG_FILE" 2>&1
 else
-    exec python3 main.py
+    exec python3 main.py >> "$LOG_FILE" 2>&1
 fi
 EOF
 
 chmod +x "$APP_DIR/Contents/MacOS/Jarvis"
+xattr -cr "$APP_DIR" 2>/dev/null || true
 
 # Install directly to /Applications so there is only one official app bundle
 echo "📲 Updating /Applications/Jarvis.app..."
 rm -rf "/Applications/Jarvis.app"
 cp -R "$APP_DIR" "/Applications/Jarvis.app"
+xattr -cr "/Applications/Jarvis.app" 2>/dev/null || true
 
 # Copy App to DMG root
 cp -R "$APP_DIR" "$DMG_ROOT/"

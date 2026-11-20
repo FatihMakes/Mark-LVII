@@ -1364,7 +1364,7 @@ class MainWindow(QMainWindow):
         self._upload_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._upload_btn.setStyleSheet(f"""
             QPushButton {{
-                background: {C.CARD};
+                background: {C.PANEL};
                 color: {C.PRI};
                 border: 1px solid {C.BORDER};
                 border-radius: 4px;
