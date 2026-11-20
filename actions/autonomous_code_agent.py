@@ -168,7 +168,62 @@ def autonomous_code_agent(parameters: dict, player=None) -> str:
         except Exception as e:
             return f"Command execution failed: {e}"
 
-    return f"Unknown action '{action}'. Supported actions: read, edit, write, search, command."
+    elif action in ("create_project", "scaffold"):
+        project_name = parameters.get("project_name") or p.name or "new_project"
+        project_dir = p if p.is_dir() and p.name == project_name else (p / project_name if p.is_dir() else p.parent / project_name)
+        project_type = (parameters.get("project_type") or "python").lower()
+        files = parameters.get("files") or {}
+
+        try:
+            project_dir.mkdir(parents=True, exist_ok=True)
+            created_files = []
+
+            # If user or model provided custom files dictionary
+            if isinstance(files, dict) and files:
+                for rel_path, file_content in files.items():
+                    fpath = project_dir / rel_path
+                    fpath.parent.mkdir(parents=True, exist_ok=True)
+                    fpath.write_text(str(file_content), encoding="utf-8")
+                    created_files.append(rel_path)
+            else:
+                # Built-in templates based on project_type
+                if "python" in project_type:
+                    (project_dir / "main.py").write_text(
+                        f'"""\n{project_name} - Built by JARVIS Autonomous Engineering\n"""\n\ndef main():\n    print("Hello from {project_name}!")\n\nif __name__ == "__main__":\n    main()\n',
+                        encoding="utf-8"
+                    )
+                    (project_dir / "requirements.txt").write_text("# Project dependencies\nrequests\n", encoding="utf-8")
+                    (project_dir / "README.md").write_text(f"# {project_name}\n\nAutomated project scaffolded by JARVIS for Aman Kumar.\n\n## Getting Started\n```bash\npython main.py\n```\n", encoding="utf-8")
+                    created_files.extend(["main.py", "requirements.txt", "README.md"])
+                elif "react" in project_type or "web" in project_type or "html" in project_type:
+                    (project_dir / "index.html").write_text(
+                        f'<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <title>{project_name}</title>\n  <style>body {{ font-family: sans-serif; background: #0f172a; color: #f8fafc; text-align: center; padding: 4rem; }}</style>\n</head>\n<body>\n  <h1>⚡ {project_name}</h1>\n  <p>Engineered autonomously by JARVIS.</p>\n  <script src="app.js"></script>\n</body>\n</html>',
+                        encoding="utf-8"
+                    )
+                    (project_dir / "app.js").write_text(f'console.log("{project_name} initialized by JARVIS.");\n', encoding="utf-8")
+                    (project_dir / "README.md").write_text(f"# {project_name}\nWeb application scaffolded by JARVIS.\n", encoding="utf-8")
+                    created_files.extend(["index.html", "app.js", "README.md"])
+                else:
+                    (project_dir / "README.md").write_text(f"# {project_name}\n\nCreated by JARVIS.\n", encoding="utf-8")
+                    created_files.append("README.md")
+
+            # Try git init
+            try:
+                subprocess.run(["git", "init"], cwd=project_dir, capture_output=True, timeout=10)
+            except Exception:
+                pass
+
+            summary = f"Created new {project_type} project at {project_dir} with {len(created_files)} files: {', '.join(created_files)}."
+            if player and hasattr(player, "show_content"):
+                player.show_content(f"Project Created: {project_name}", f"### Location: `{project_dir}`\n\n**Files generated:**\n" + "\n".join(f"- `{f}`" for f in created_files))
+            if player and hasattr(player, "write_log"):
+                player.write_log(f"CODE: Scaffolded project '{project_name}' ({len(created_files)} files)")
+
+            return summary
+        except Exception as e:
+            return f"Failed to create project: {e}"
+
+    return f"Unknown action '{action}'. Supported actions: read, edit, write, search, command, create_project."
 
 
 TOOL = {
@@ -176,14 +231,15 @@ TOOL = {
     "description": (
         "Antigravity-grade autonomous software engineering tool for JARVIS. "
         "Allows reading file contents, performing surgical code edits with AST syntax verification, "
-        "writing new code files, searching codebases across directories, and executing terminal commands."
+        "writing new code files, searching codebases across directories, executing terminal commands, "
+        "and creating brand new project structures/scaffolds from scratch."
     ),
     "parameters": {
         "type": "OBJECT",
         "properties": {
             "action": {
                 "type": "STRING",
-                "description": "Operation to perform: read | edit | write | search | command",
+                "description": "Operation: read | edit | write | search | command | create_project",
             },
             "path": {
                 "type": "STRING",
