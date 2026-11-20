@@ -112,6 +112,16 @@ class WhisperSTT:
         )
         return model, time.monotonic() - t0
 
+    def _speech_recognition_blocking(self, pcm, sample_rate) -> str:
+        try:
+            import speech_recognition as sr
+            r = sr.Recognizer()
+            audio_data = sr.AudioData(pcm, sample_rate, 2)
+            lang = self.language or "en-US"
+            return r.recognize_google(audio_data, language=lang).strip()
+        except Exception:
+            return ""
+
     async def _ensure_model(self, log=None):
         if self._model is not None:
             return self._model
@@ -119,9 +129,11 @@ class WhisperSTT:
             if self._model is not None:
                 return self._model
             if find_spec("faster_whisper") is None:
+                if find_spec("speech_recognition") is not None:
+                    self._model = "speech_recognition"
+                    return self._model
                 raise RuntimeError(
-                    "faster-whisper is not installed — install it from the "
-                    "providers panel, or with: pip install faster-whisper")
+                    "Speech recognition engine is not installed.")
             if log:
                 log(f"SYS: loading the {self.model_name} speech model "
                     f"(the first time also downloads it)")
@@ -243,6 +255,9 @@ class WhisperSTT:
         if self.backend == "api":
             return await asyncio.to_thread(self._api_blocking, pcm, sample_rate)
 
+        if find_spec("faster_whisper") is None:
+            return await asyncio.to_thread(self._speech_recognition_blocking, pcm, sample_rate)
+
         await self._ensure_model(log)
         samples = audio.to_float32(
             audio.resample(pcm, sample_rate, 16_000))    # Whisper is a 16 kHz model
@@ -270,6 +285,8 @@ class WhisperSTT:
         """
         if self.backend != "local":
             return
+        if find_spec("faster_whisper") is None:
+            return
         try:
             await self._ensure_model(log)
             t0 = time.monotonic()
@@ -289,6 +306,8 @@ class WhisperSTT:
                 return False, "No address set."
             return True, "Will be checked on first use."
         if find_spec("faster_whisper") is None:
+            if find_spec("speech_recognition") is not None:
+                return True, "Built-in Speech Recognizer (Active)"
             return False, "faster-whisper is not installed."
         return True, (f"{self.model_name} on {self.device} "
                       f"({self._compute_type()}, {_threads()} threads)")
