@@ -1150,33 +1150,6 @@ class MainWindow(QMainWindow):
                 (cw.height() - oh) // 2,
                 ow, oh,
             )
-
-    def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls():
-            event.acceptProposedAction()
-        else:
-            event.ignore()
-
-    def dropEvent(self, event):
-        urls = event.mimeData().urls()
-        if not urls:
-            return
-        paths = [Path(u.toLocalFile()) for u in urls if u.toLocalFile()]
-        if not paths:
-            return
-        event.acceptProposedAction()
-        for p in paths:
-            self._log_sig.emit(f"SYS: File uploaded: {p.name}")
-            try:
-                from actions.document_studio import extract_document_text
-                txt = extract_document_text(str(p))
-                if txt and not txt.startswith("Error") and not txt.startswith("File not found"):
-                    preview = txt[:2500] + ("\n...[content truncated]" if len(txt) > 2500 else "")
-                    self._content_sig.emit(f"Document Uploaded: {p.name}", f"### Preview of `{p.name}`\n```\n{preview}\n```\n\n*Drop more files anytime to inspect, edit, or analyze.*")
-                else:
-                    self._content_sig.emit(f"File Uploaded: {p.name}", f"**Location:** `{p}`\n\nFile received and indexed for processing.")
-            except Exception:
-                self._content_sig.emit(f"File Uploaded: {p.name}", f"**Location:** `{p}`\n\nReady for processing.")
         if self._customize_overlay and self._customize_overlay.isVisible():
             ow, oh = CustomizeOverlay._OW, CustomizeOverlay._OH
             self._customize_overlay.setGeometry(
@@ -1201,6 +1174,56 @@ class MainWindow(QMainWindow):
         if hasattr(self, '_ctrl_drawer') and self._ctrl_drawer.isVisible():
             self._position_ctrl_drawer()
         self._fit_video()
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        urls = event.mimeData().urls()
+        if not urls:
+            return
+        paths = [Path(u.toLocalFile()) for u in urls if u.toLocalFile()]
+        if not paths:
+            return
+        event.acceptProposedAction()
+        for p in paths:
+            if p.is_dir():
+                self._log_sig.emit(f"SYS: Folder uploaded: {p.name}/")
+                try:
+                    entries = list(p.glob("*"))
+                    file_list = "\n".join(f"- `{e.name}`" for e in entries[:25])
+                    more = f"\n*...and {len(entries) - 25} more items*" if len(entries) > 25 else ""
+                    self._content_sig.emit(
+                        f"Folder Uploaded: {p.name}/",
+                        f"### 📁 Folder `{p.name}` ({len(entries)} items)\n**Path:** `{p}`\n\n{file_list}{more}\n\n*Ready for batch processing, search, or code inspection.*"
+                    )
+                except Exception as e:
+                    self._content_sig.emit(f"Folder: {p.name}", f"**Location:** `{p}`\n\nReceived.")
+            elif p.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"):
+                self._log_sig.emit(f"SYS: Image uploaded: {p.name}")
+                sz = round(p.stat().st_size / 1024, 1)
+                self._content_sig.emit(
+                    f"Image Uploaded: {p.name}",
+                    f"### 🖼️ `{p.name}` ({sz} KB)\n**Location:** `{p}`\n\nImage indexed and ready for vision analysis, OCR, visual recon, or editing."
+                )
+            else:
+                self._log_sig.emit(f"SYS: File uploaded: {p.name}")
+                try:
+                    from actions.document_studio import extract_document_text
+                    txt = extract_document_text(str(p))
+                    if txt and not txt.startswith("Error") and not txt.startswith("File not found"):
+                        preview = txt[:2500] + ("\n...[content truncated]" if len(txt) > 2500 else "")
+                        self._content_sig.emit(
+                            f"Document Uploaded: {p.name}",
+                            f"### Preview of `{p.name}`\n```\n{preview}\n```\n\n*Drop more files anytime to inspect, edit, or analyze.*"
+                        )
+                    else:
+                        self._content_sig.emit(f"File Uploaded: {p.name}", f"**Location:** `{p}`\n\nFile received and indexed for processing.")
+                except Exception:
+                    self._content_sig.emit(f"File Uploaded: {p.name}", f"**Location:** `{p}`\n\nReady for processing.")
 
     def _update_metrics(self):
         snap = _metrics.snapshot()
