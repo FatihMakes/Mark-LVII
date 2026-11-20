@@ -3091,12 +3091,13 @@ class MainWindow(QMainWindow):
         # the whole file with these two keys, so re-entering a key after an
         # "API key invalid" error erased every other setting — the wake word, the
         # local engine, plugin credentials, the assistant's name.
-        from memory.config_manager import update_config
+        from memory.config_manager import update_config, save_provider_mode
         fields = {"os_system": os_name, "local_only": not key}
         if key:
             raw_keys = [k.strip() for k in key.replace("\n", ",").split(",") if k.strip()]
             fields["gemini_api_key"] = raw_keys[0] if raw_keys else key.strip()
             fields["gemini_api_keys"] = raw_keys
+            save_provider_mode("gemini")
         update_config(**fields)
         try:
             from core import gemini as _gemini
@@ -3112,5 +3113,7 @@ class MainWindow(QMainWindow):
         self._apply_state("LISTENING")
         self._assistant_name = _read_full_config().get("assistant_name", "JARVIS") or "JARVIS"
         self._log.append_log(f"SYS: Initialised. OS={os_name.upper()}. {self._assistant_name} online.")
+        if self.on_audio_device_change:
+            self.on_audio_device_change()
 
 
