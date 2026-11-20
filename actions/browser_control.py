@@ -805,8 +805,19 @@ class _BrowserSession:
             self.profile_kind = "separate"
             print(f"[Browser] ✅ Launched [{label}] with JARVIS profile "
                   f"(sign-ins persist across sessions)")
+            return
         except Exception as e2:
-            raise RuntimeError(f"Could not launch {self.browser_name}: {e2}") from e2
+            print(f"[Browser] ⚠️ Persistent launch with {label} failed ({e2}). Retrying with bundled Chromium...")
+
+        # Bundled Playwright Chromium: never collides with running macOS/Windows browser apps
+        clean_kwargs = {k: v for k, v in kwargs.items() if k not in ("executable_path", "channel")}
+        try:
+            self._context = await self._pw.chromium.launch_persistent_context(jarvis_profile, **clean_kwargs)
+            self._page = await self._adopt_page()
+            self.profile_kind = "bundled"
+            print(f"[Browser] ✅ Launched bundled Chromium with JARVIS profile")
+        except Exception as e3:
+            raise RuntimeError(f"Could not launch browser for {self.browser_name}: {e3}") from e3
 
 
     async def _get_page(self) -> Page:
@@ -824,14 +835,28 @@ class _BrowserSession:
         prev_url = page.url
 
         async def _do_goto(p: Page) -> str:
-            """Attempt navigation and return the resulting URL (may still be blank)."""
+            """Attempt navigation with multi-tier wait and SPA client-side hydration."""
             try:
-                await p.goto(url, wait_until="domcontentloaded", timeout=30_000)
-                await asyncio.sleep(0.3)
+                # Stage 1: Fast initial DOM load
+                await p.goto(url, wait_until="domcontentloaded", timeout=20_000)
             except PlaywrightTimeout:
-                pass   # page may have partially loaded — check URL below
+                try:
+                    await p.wait_for_load_state("commit", timeout=5_000)
+                except Exception:
+                    pass
             except Exception as e:
-                print(f"[Browser] goto exception (non-fatal): {e}")
+                print(f"[Browser] goto exception: {e}")
+                try:
+                    await p.goto(url, wait_until="commit", timeout=15_000)
+                except Exception as e2:
+                    print(f"[Browser] fallback goto failed: {e2}")
+
+            # Stage 2: Allow dynamic client-side hydration (React/Next/Vue/SPAs)
+            try:
+                await p.wait_for_load_state("load", timeout=6_000)
+            except Exception:
+                pass
+            await asyncio.sleep(0.5)
             return p.url
 
         result_url = await _do_goto(page)
@@ -911,12 +936,23 @@ class _BrowserSession:
         except Exception as e:
             return f"Type error: {e}"
 
-    async def scroll(self, direction: str = "down", amount: int = 500) -> str:
+    async def scroll(self, direction: str = "down", amount: int = 600, scroll_to: str = None) -> str:
         page = await self._get_page()
         try:
+            if scroll_to == "bottom":
+                await page.evaluate("() => window.scrollTo({top: document.body.scrollHeight || document.documentElement.scrollHeight, behavior: 'smooth'})")
+                await asyncio.sleep(0.5)
+                return "Scrolled to the bottom of the page."
+            elif scroll_to == "top":
+                await page.evaluate("() => window.scrollTo({top: 0, behavior: 'smooth'})")
+                await asyncio.sleep(0.5)
+                return "Scrolled to the top of the page."
+
             y = amount if direction == "down" else -amount
+            await page.evaluate(f"() => window.scrollBy({{top: {y}, behavior: 'smooth'}})")
             await page.mouse.wheel(0, y)
-            return f"Scrolled {direction}."
+            await asyncio.sleep(0.4)
+            return f"Scrolled {direction} by {amount}px."
         except Exception as e:
             return f"Scroll error: {e}"
 
@@ -1051,55 +1087,112 @@ class _BrowserSession:
         except Exception as e:
             return f"Reload error: {e}"
 
-    async def inspect_page(self) -> str:
-        """Antigravity-style deep page inspection: extracts title, text, buttons, links, and forms."""
+    async def scan_and_scroll(self, max_scrolls: int = 8, delay: float = 0.5) -> str:
+        """
+        Antigravity-grade autonomous page scanning and progressive scrolling:
+        1. Smoothly scrolls down the page in increments to trigger lazy-loading, SPAs, and infinite lists.
+        2. Waits at each increment for dynamic content/scripts to settle.
+        3. Extracts full hierarchy: H1-H6 headings, text blocks, buttons, inputs, links, media.
+        4. Smoothly scrolls back to top so user view is preserved.
+        5. Formats a comprehensive Markdown report.
+        """
         page = await self._get_page()
         try:
-            title = await page.title()
-            url = page.url
-            body_text = (await page.inner_text("body"))[:2500]
+            metrics = await page.evaluate("""() => ({
+                title: document.title || '',
+                url: window.location.href || '',
+                scrollHeight: document.body ? (document.body.scrollHeight || document.documentElement.scrollHeight || 0) : 0,
+                viewportHeight: window.innerHeight || 800,
+            })""")
 
-            elements = []
-            buttons = await page.locator("button, [role='button'], input[type='submit'], input[type='button']").all()
-            for b in buttons[:10]:
-                try:
-                    txt = (await b.inner_text()).strip() or (await b.get_attribute("value") or "").strip()
-                    if txt:
-                        elements.append(f"• [Button] \"{txt[:40]}\"")
-                except Exception:
-                    pass
+            title = metrics.get("title") or await page.title()
+            url = metrics.get("url") or page.url
+            viewport_h = metrics.get("viewportHeight") or 800
 
-            inputs = await page.locator("input[type='text'], input[type='search'], input[type='email'], input[type='password'], textarea").all()
-            for inp in inputs[:10]:
-                try:
-                    ph = (await inp.get_attribute("placeholder") or "").strip()
-                    aria = (await inp.get_attribute("aria-label") or "").strip()
-                    name = ph or aria or "Text Input"
-                    elements.append(f"• [Input] \"{name[:40]}\"")
-                except Exception:
-                    pass
+            scroll_step = int(viewport_h * 0.75)
+            actual_scrolls = 0
+            for _ in range(max_scrolls):
+                prev_scroll_y = await page.evaluate("() => window.scrollY || window.pageYOffset || 0")
+                await page.evaluate(f"() => window.scrollBy({{top: {scroll_step}, behavior: 'smooth'}})")
+                await asyncio.sleep(delay)
+                new_scroll_y = await page.evaluate("() => window.scrollY || window.pageYOffset || 0")
+                actual_scrolls += 1
+                if new_scroll_y <= prev_scroll_y:
+                    break
 
-            links = await page.locator("a[href]").all()
-            for a in links[:10]:
-                try:
-                    ltxt = (await a.inner_text()).strip()
-                    href = (await a.get_attribute("href") or "").strip()
-                    if ltxt and len(ltxt) > 1 and not href.startswith("javascript:"):
-                        elements.append(f"• [Link] \"{ltxt[:40]}\" → {href[:60]}")
-                except Exception:
-                    pass
+            data = await page.evaluate("""() => {
+                const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4'))
+                    .map(h => `${'#'.repeat(parseInt(h.tagName[1]) || 2)} ${h.innerText.trim()}`)
+                    .filter(h => h.length > 2)
+                    .slice(0, 15);
 
-            elems_md = "\n".join(elements) if elements else "• No prominent buttons or inputs detected."
-            return (
-                f"# 🌐 {title}\n"
-                f"**URL:** [{url}]({url})\n\n"
+                const bodyText = (document.body ? document.body.innerText : '')
+                    .replace(/\\n{3,}/g, '\\n\\n')
+                    .trim()
+                    .slice(0, 5000);
+
+                const buttons = Array.from(document.querySelectorAll(
+                    "button, [role='button'], input[type='submit'], input[type='button'], a.btn, a.button"
+                ))
+                    .map(b => (b.innerText || b.value || b.getAttribute('aria-label') || '').trim())
+                    .filter(t => t.length > 0 && t.length < 50)
+                    .slice(0, 15);
+
+                const inputs = Array.from(document.querySelectorAll(
+                    "input:not([type='hidden']), textarea, select"
+                ))
+                    .map(i => {
+                        const type = i.type || 'text';
+                        const ph = i.placeholder || i.getAttribute('aria-label') || i.name || i.id || '';
+                        return `[${type}] ${ph}`.trim();
+                    })
+                    .filter(t => t.length > 2)
+                    .slice(0, 15);
+
+                const links = Array.from(document.querySelectorAll('a[href]'))
+                    .map(a => ({
+                        text: (a.innerText || a.getAttribute('aria-label') || '').trim(),
+                        href: a.href
+                    }))
+                    .filter(l => l.text && l.text.length > 1 && !l.href.startsWith('javascript:'))
+                    .slice(0, 15);
+
+                return { headings, bodyText, buttons, inputs, links };
+            }""")
+
+            try:
+                await page.evaluate("() => window.scrollTo({top: 0, behavior: 'smooth'})")
+            except Exception:
+                pass
+
+            headings_md = "\n".join(data.get("headings", [])) or "*No prominent headings detected.*"
+            buttons_md = "\n".join(f"• [Button] \"{b}\"" for b in data.get("buttons", [])) or "• None"
+            inputs_md = "\n".join(f"• [Input] {i}" for i in data.get("inputs", [])) or "• None"
+            links_md = "\n".join(f"• [{l['text'][:40]}]({l['href']})" for l in data.get("links", [])) or "• None"
+            body_preview = data.get("bodyText", "")
+
+            report = (
+                f"# 🌐 Antigravity Deep Scan: {title}\n"
+                f"**URL:** [{url}]({url})  \n"
+                f"**Scan Depth:** {actual_scrolls} progressive scroll steps completed. Dynamic DOM hydrated.\n\n"
+                f"### 📑 Page Outline:\n"
+                f"{headings_md}\n\n"
                 f"### 📄 Page Content Preview:\n"
-                f"```\n{body_text}\n```\n\n"
+                f"```text\n{body_preview}\n```\n\n"
                 f"### 🔘 Interactive Controls Detected:\n"
-                f"{elems_md}"
+                f"{buttons_md}\n\n"
+                f"### 📝 Form Fields & Inputs:\n"
+                f"{inputs_md}\n\n"
+                f"### 🔗 Key Navigation Links:\n"
+                f"{links_md}\n"
             )
+            return report
         except Exception as e:
-            return f"Error inspecting page: {e}"
+            return f"Scan and scroll error: {e}"
+
+    async def inspect_page(self) -> str:
+        """Antigravity-style deep page inspection: extracts title, text, buttons, links, and forms."""
+        return await self.scan_and_scroll(max_scrolls=3)
 
     async def close_browser(self) -> str:
         await self._async_close()
@@ -1198,6 +1291,7 @@ _ACTIONS = (
     "scroll", "get_text", "get_url", "screenshot",
     "back", "forward", "reload",
     "switch", "list_browsers", "close", "close_all",
+    "browse", "scan", "deep_scan", "inspect", "inspect_page", "scroll_and_scan",
 )
 
 
@@ -1312,29 +1406,36 @@ def browser_control(
 
     try:
         last = _registry.pop_native_url()
-        if last:
+        if last and action not in ("browse", "scan", "deep_scan", "inspect", "inspect_page", "go_to", "search", "new_tab") and not params.get("url"):
             try:
                 sess.run(sess.go_to(last))
             except Exception as e:
                 print(f"[Browser] Could not resume last page ({last}): {e}")
 
-        elif action in ("browse", "inspect", "inspect_page"):
+        if action in ("browse", "scan", "deep_scan", "inspect", "inspect_page", "scroll_and_scan"):
             target_url = params.get("url")
             if target_url:
                 sess.run(sess.go_to(target_url))
-            result = sess.run(sess.inspect_page())
+            max_scrolls = int(params.get("max_scrolls", 6))
+            result = sess.run(sess.scan_and_scroll(max_scrolls=max_scrolls))
             if player and hasattr(player, "show_content"):
                 try:
                     player.show_content("Web Browser (Antigravity Mode)", result)
                 except Exception:
                     pass
+        elif action == "go_to":
+            result = sess.run(sess.go_to(params.get("url", "")))
         elif action == "click":
             result = sess.run(sess.click(params.get("selector"), params.get("text")))
         elif action == "type":
             result = sess.run(sess.type_text(
                 params.get("selector"), params.get("text", ""), params.get("clear_first", True)))
         elif action == "scroll":
-            result = sess.run(sess.scroll(params.get("direction", "down"), int(params.get("amount", 500))))
+            result = sess.run(sess.scroll(
+                direction=params.get("direction", "down"),
+                amount=int(params.get("amount", 600)),
+                scroll_to=params.get("scroll_to")
+            ))
         elif action == "fill_form":
             result = sess.run(sess.fill_form(params.get("fields", {})))
         elif action == "smart_click":
@@ -1425,7 +1526,7 @@ TOOL = {
         "properties": {
             "action": {
                 "type": "STRING",
-                "description": "browse | inspect_page | go_to | search | smart_click | smart_type | click | type | scroll | fill_form | get_text | get_url | press | new_tab | close_tab | screenshot | back | forward | reload | switch | list_browsers | close | close_all"
+                "description": "browse | scan | deep_scan | inspect_page | go_to | search | smart_click | smart_type | click | type | scroll | fill_form | get_text | get_url | press | new_tab | close_tab | screenshot | back | forward | reload | switch | list_browsers | close | close_all"
             },
             "browser": {
                 "type": "STRING",
@@ -1433,7 +1534,15 @@ TOOL = {
             },
             "url": {
                 "type": "STRING",
-                "description": "URL for go_to / new_tab action"
+                "description": "URL for browse / scan / go_to / new_tab action"
+            },
+            "max_scrolls": {
+                "type": "INTEGER",
+                "description": "Number of progressive scroll steps for browse/scan (default: 6)"
+            },
+            "scroll_to": {
+                "type": "STRING",
+                "description": "top | bottom for scroll action"
             },
             "query": {
                 "type": "STRING",

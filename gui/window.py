@@ -1229,6 +1229,12 @@ class MainWindow(QMainWindow):
                 self._handle_uploaded_path(Path(folder))
 
     def _handle_uploaded_path(self, p: Path):
+        try:
+            from actions.file_processor import set_last_uploaded
+            set_last_uploaded(p)
+        except Exception:
+            pass
+
         if p.is_dir():
             self._log_sig.emit(f"SYS: Folder uploaded: {p.name}/")
             try:
@@ -1283,8 +1289,12 @@ class MainWindow(QMainWindow):
                         self.on_text_command(f"SYS_CONTEXT: The user uploaded document '{p.name}' at '{p}'. Content:\n{txt[:2500]}")
                 else:
                     self._content_sig.emit(f"File: {p.name}", f"**Location:** `{p}`\n\nIndexed and ready for processing.")
+                    if hasattr(self, 'on_text_command') and callable(self.on_text_command):
+                        self.on_text_command(f"SYS_CONTEXT: The user uploaded file '{p.name}' at '{p}'. Ready for processing with file_processor.")
             except Exception:
                 self._content_sig.emit(f"File: {p.name}", f"**Location:** `{p}`\n\nReady for processing.")
+                if hasattr(self, 'on_text_command') and callable(self.on_text_command):
+                    self.on_text_command(f"SYS_CONTEXT: The user uploaded file '{p.name}' at '{p}'. Ready for processing with file_processor.")
 
     def _update_metrics(self):
         snap = _metrics.snapshot()

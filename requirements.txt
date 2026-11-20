@@ -51,6 +51,7 @@ mss>=9,<11
 psutil>=5.9,<8
 send2trash                   # file_controller — recoverable deletes
 python-pptx                  # file_processor — presentation reading
+pandas                       # file_processor — data analysis and CSV/Excel parsing
 
 # ── Remote dashboard (control from your phone) ────────────────────────────────
 fastapi>=0.110,<1
