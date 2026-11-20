@@ -1822,14 +1822,22 @@ class JarvisLive:
             # the echo of what we are playing right now", sustained long enough
             # that a cough or a keystroke cannot trigger it.
             if jarvis_speaking:
-                # Nothing is streamed while JARVIS talks.
-                #
-                # Interrupting by voice used to live here: `EchoGuard` can pick a
-                # user out from under our own echo, and `core/echo.py` still does
-                # that for the tail below. Re-enabling is small — classify each
-                # block here and call interrupt() after `required_blocks` of
-                # agreement — but it depends on the listener's room, so it stays
-                # out until it can be tried on real hardware.
+                # ── Active Voice Barge-In / Interruption ─────────────────────
+                # Real-time interruption: If user starts speaking while JARVIS is speaking,
+                # detect the user's voice, cancel playback immediately, and open the mic.
+                try:
+                    lvl = _pcm_level(indata)
+                    if lvl > 0.08 and self._echo.is_user_speech(indata, SEND_SAMPLE_RATE, lvl):
+                        self._user_speech_run = getattr(self, "_user_speech_run", 0) + 1
+                        if self._user_speech_run >= max(2, self._echo.required_blocks // 2):
+                            self._user_speech_run = 0
+                            print("[JARVIS] ⚡ Voice interruption detected — stopping playback.")
+                            self.interrupt()
+                            return
+                    else:
+                        self._user_speech_run = 0
+                except Exception:
+                    pass
                 return
 
             # ── Echo tail ────────────────────────────────────────────────────
