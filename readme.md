@@ -1,9 +1,33 @@
-# ⚙️ MARK LVII (57)
-### The Ultimate Cross-Platform Personal AI Assistant — By FatihMakes
+# ⚙️ MARK LVII (57) — Enterprise Extended Edition
+### The Ultimate Cross-Platform Personal AI Assistant
+**Original Project by [FatihMakes](https://github.com/FatihMakes) • Enterprise Capabilities & Autonomous Suite Contributed by [Aman Kumar (@iamTechieAman)](https://github.com/iamTechieAman/Jarvis)**
 
-> 📺 **[Watch the full setup video on YouTube](https://www.youtube.com/@FatihMakes)**
+> 📺 **[Original Video by FatihMakes](https://www.youtube.com/@FatihMakes)** | 🚀 **[Enterprise Repository by iamTechieAman](https://github.com/iamTechieAman/Jarvis)**
 
-A real-time voice AI that can hear, see, speak, and control your computer — on any OS. Supports Windows, macOS, and Linux. Built on the Gemini Live API for native audio streaming, delivering zero subscriptions and total digital autonomy.
+A real-time voice AI that can hear, see, speak, and control your computer — on any OS. Supports Windows, macOS, and Linux. Built on the Gemini Live API for native audio streaming, with full **100% free offline local Ollama runtime** fallback, zero subscriptions, and total digital autonomy.
+
+---
+
+## 🌟 Enterprise & Autonomous Extensions (Contributed by Aman Kumar / @iamTechieAman)
+
+This fork extends Mark-LVII with professional grade engineering, cybersecurity, quantitative finance, and multimodal intelligence:
+
+| Contributed Module | Capability |
+|---|---|
+| 🦙 **100% Free Local Ollama** | Zero-cost local execution with Ollama (`llama3.2`, `mistral`, `deepseek-r1`) and macOS native speech synthesis (`say`). |
+| 🛡️ **Cyber Security Suite** | Safe TCP port scanning, SSL/TLS certificate auditing, HTTP security headers analysis, hash identification, and listening socket tracking. |
+| 📈 **AI Trading Engine** | Real-time crypto & stock market analysis, RSI (14), MACD, Moving Averages (20/50/200), Bollinger Bands, trade signals, and risk/position sizing calculators. |
+| 🔍 **REA (Reverse Engineering Anything)** | Deep reverse engineering of APIs, JWT tokens, Android APK packages (manifest, dex string pools, secrets), and native binaries (Mach-O, ELF, PE) with entropy calculations. |
+| 📑 **Document Studio** | ChatGPT & Claude style document analysis, PDF merging, page splitting, markdown-to-PDF conversion, and universal multi-format file generation. |
+| 🎨 **AI Image Generation** | High-fidelity image creation from text descriptions (FLUX / SDXL) with instant macOS Preview launch. |
+| 📞 **Telephony & Continuity Calls** | Direct outbound phone calls via macOS iPhone Continuity / FaceTime Audio and Twilio Voice API. |
+| 👁️ **Visual Recon & Lens** | Camera inspection of real-world objects, documents, and hardware with automatic Google search fallback for specs, pricing, and manuals. |
+| 👤 **Adaptive Honorific Engine** | Intelligently addresses the user as "Sir", "Ma'am", or "Madam" based on speaker gender detection rather than a hardcoded default. |
+| 🧠 **Self-Learning & Dynamic Plugins** | Persists user rules and workflows across sessions, and autonomously writes new drop-in plugins into `plugins/` on the fly. |
+| ⚡ **Active Voice Barge-In** | Interrupts speech output the instant the user speaks mid-sentence, exactly like GPT/Gemini Live mode. |
+| 💿 **macOS DMG Installer** | Bundles a standalone macOS application and builds a one-click drag-and-drop `.dmg` installer on Desktop. |
+
+---
 
 ---
 
