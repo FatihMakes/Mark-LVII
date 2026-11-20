@@ -163,6 +163,7 @@ class MainWindow(QMainWindow):
 
         central = QWidget()
         central.setStyleSheet(f"background: {C.BG};")
+        central.setAcceptDrops(True)
         self.setCentralWidget(central)
 
         root = QVBoxLayout(central)
@@ -179,6 +180,7 @@ class MainWindow(QMainWindow):
 
         # Center column: HUD + resizable content panel via QSplitter
         self.hud = HudCanvas(face_path, _display)
+        self.hud.setAcceptDrops(True)
         self.hud.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._content_panel = self._build_content_panel()
         self._quiz_panel = self._build_quiz_panel()
@@ -1190,40 +1192,93 @@ class MainWindow(QMainWindow):
             return
         event.acceptProposedAction()
         for p in paths:
-            if p.is_dir():
-                self._log_sig.emit(f"SYS: Folder uploaded: {p.name}/")
-                try:
-                    entries = list(p.glob("*"))
-                    file_list = "\n".join(f"- `{e.name}`" for e in entries[:25])
-                    more = f"\n*...and {len(entries) - 25} more items*" if len(entries) > 25 else ""
-                    self._content_sig.emit(
-                        f"Folder Uploaded: {p.name}/",
-                        f"### 📁 Folder `{p.name}` ({len(entries)} items)\n**Path:** `{p}`\n\n{file_list}{more}\n\n*Ready for batch processing, search, or code inspection.*"
-                    )
-                except Exception as e:
-                    self._content_sig.emit(f"Folder: {p.name}", f"**Location:** `{p}`\n\nReceived.")
-            elif p.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"):
-                self._log_sig.emit(f"SYS: Image uploaded: {p.name}")
-                sz = round(p.stat().st_size / 1024, 1)
-                self._content_sig.emit(
-                    f"Image Uploaded: {p.name}",
-                    f"### 🖼️ `{p.name}` ({sz} KB)\n**Location:** `{p}`\n\nImage indexed and ready for vision analysis, OCR, visual recon, or editing."
+            self._handle_uploaded_path(p)
+
+    def _prompt_upload(self):
+        from PyQt6.QtWidgets import QMenu, QFileDialog
+        menu = QMenu(self)
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background: {C.PANEL};
+                color: {C.WHITE};
+                border: 1px solid {C.BORDER};
+                padding: 4px;
+            }}
+            QMenu::item {{
+                padding: 6px 18px;
+                border-radius: 3px;
+            }}
+            QMenu::item:selected {{
+                background: {C.PRI};
+                color: {C.BG};
+            }}
+        """)
+        act_file = menu.addAction("📄 Upload Files / Images / PDFs...")
+        act_folder = menu.addAction("📁 Upload Entire Folder...")
+        chosen = menu.exec(self._upload_btn.mapToGlobal(self._upload_btn.rect().bottomLeft()))
+        if chosen == act_file:
+            files, _ = QFileDialog.getOpenFileNames(
+                self, "Select Files to Upload into JARVIS", str(Path.home()),
+                "Supported (*.pdf *.png *.jpg *.jpeg *.webp *.txt *.py *.docx *.csv *.json *.md *.html);;All Files (*.*)"
+            )
+            for f in files:
+                self._handle_uploaded_path(Path(f))
+        elif chosen == act_folder:
+            folder = QFileDialog.getExistingDirectory(self, "Select Folder to Upload into JARVIS", str(Path.home()))
+            if folder:
+                self._handle_uploaded_path(Path(folder))
+
+    def _handle_uploaded_path(self, p: Path):
+        if p.is_dir():
+            self._log_sig.emit(f"SYS: Folder uploaded: {p.name}/")
+            try:
+                entries = list(p.glob("*"))
+                file_list = "\n".join(f"- `{e.name}` ({round(e.stat().st_size/1024, 1)} KB)" if e.is_file() else f"- 📁 `{e.name}/`" for e in entries[:30])
+                more = f"\n\n*...and {len(entries) - 30} more items*" if len(entries) > 30 else ""
+                report = (
+                    f"# 📁 Folder Uploaded: `{p.name}/`\n"
+                    f"**Location:** `{p}`  \n"
+                    f"**Total Items:** `{len(entries)}`  \n\n"
+                    f"### Files & Subdirectories:\n"
+                    f"{file_list}{more}\n\n"
+                    f"---\n"
+                    f"*Indexed into JARVIS working context. Say 'Analyze this folder' or ask questions about its code or data.*"
                 )
-            else:
-                self._log_sig.emit(f"SYS: File uploaded: {p.name}")
-                try:
-                    from actions.document_studio import extract_document_text
-                    txt = extract_document_text(str(p))
-                    if txt and not txt.startswith("Error") and not txt.startswith("File not found"):
-                        preview = txt[:2500] + ("\n...[content truncated]" if len(txt) > 2500 else "")
-                        self._content_sig.emit(
-                            f"Document Uploaded: {p.name}",
-                            f"### Preview of `{p.name}`\n```\n{preview}\n```\n\n*Drop more files anytime to inspect, edit, or analyze.*"
-                        )
-                    else:
-                        self._content_sig.emit(f"File Uploaded: {p.name}", f"**Location:** `{p}`\n\nFile received and indexed for processing.")
-                except Exception:
-                    self._content_sig.emit(f"File Uploaded: {p.name}", f"**Location:** `{p}`\n\nReady for processing.")
+                self._content_sig.emit(f"Folder: {p.name}/", report)
+            except Exception as e:
+                self._content_sig.emit(f"Folder: {p.name}", f"**Location:** `{p}`\n\nReady for processing.")
+        elif p.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"):
+            self._log_sig.emit(f"SYS: Image uploaded: {p.name}")
+            sz = round(p.stat().st_size / 1024, 1)
+            report = (
+                f"# 🖼️ Image Uploaded: `{p.name}`\n"
+                f"**Size:** `{sz} KB` | **Format:** `{p.suffix.upper()}`  \n"
+                f"**Path:** `{p}`  \n\n"
+                f"Image received and indexed for vision analysis, OCR text extraction, visual object recognition, or editing.\n"
+                f"Ask JARVIS: *'What is in this image?'* or *'Explain this diagram'*."
+            )
+            self._content_sig.emit(f"Image: {p.name}", report)
+        else:
+            self._log_sig.emit(f"SYS: File uploaded: {p.name}")
+            try:
+                from actions.document_studio import extract_document_text
+                txt = extract_document_text(str(p))
+                if txt and not txt.startswith("Error") and not txt.startswith("File not found"):
+                    preview = txt[:2500] + ("\n...[content truncated]" if len(txt) > 2500 else "")
+                    report = (
+                        f"# 📄 Document Uploaded: `{p.name}`\n"
+                        f"**Path:** `{p}`  \n"
+                        f"**Length:** `{len(txt)}` characters  \n\n"
+                        f"### Content Preview:\n"
+                        f"```\n{preview}\n```\n\n"
+                        f"---\n"
+                        f"*Ready for deep summarization, question answering, rewriting, or editing.*"
+                    )
+                    self._content_sig.emit(f"Document: {p.name}", report)
+                else:
+                    self._content_sig.emit(f"File: {p.name}", f"**Location:** `{p}`\n\nIndexed and ready for processing.")
+            except Exception:
+                self._content_sig.emit(f"File: {p.name}", f"**Location:** `{p}`\n\nReady for processing.")
 
     def _update_metrics(self):
         snap = _metrics.snapshot()
@@ -1302,6 +1357,27 @@ class MainWindow(QMainWindow):
         self._ctrl_btn.setToolTip("Controls — the everyday switches")
         self._ctrl_btn.clicked.connect(self._toggle_controls)
         lay.addWidget(self._ctrl_btn)
+
+        self._upload_btn = QPushButton("📎 UPLOAD")
+        self._upload_btn.setFont(hud_font(8, QFont.Weight.Bold))
+        self._upload_btn.setFixedHeight(28)
+        self._upload_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._upload_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C.CARD};
+                color: {C.PRI};
+                border: 1px solid {C.BORDER};
+                border-radius: 4px;
+                padding: 4px 10px;
+            }}
+            QPushButton:hover {{
+                background: {C.PRI};
+                color: {C.BG};
+            }}
+        """)
+        self._upload_btn.setToolTip("Upload Files, Images, or Folders (Claude / ChatGPT style)")
+        self._upload_btn.clicked.connect(self._prompt_upload)
+        lay.addWidget(self._upload_btn)
         lay.addStretch()
 
         self._state_chip = StateChip()
