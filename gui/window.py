@@ -135,6 +135,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{_display} — {APP_VERSION}")
         self.setMinimumSize(_MIN_W, _MIN_H)
         self.resize(_DEFAULT_W, _DEFAULT_H)
+        self.setAcceptDrops(True)
 
         screen = QApplication.primaryScreen().availableGeometry()
         self.move(
@@ -1149,6 +1150,33 @@ class MainWindow(QMainWindow):
                 (cw.height() - oh) // 2,
                 ow, oh,
             )
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        urls = event.mimeData().urls()
+        if not urls:
+            return
+        paths = [Path(u.toLocalFile()) for u in urls if u.toLocalFile()]
+        if not paths:
+            return
+        event.acceptProposedAction()
+        for p in paths:
+            self._log_sig.emit(f"SYS: File uploaded: {p.name}")
+            try:
+                from actions.document_studio import extract_document_text
+                txt = extract_document_text(str(p))
+                if txt and not txt.startswith("Error") and not txt.startswith("File not found"):
+                    preview = txt[:2500] + ("\n...[content truncated]" if len(txt) > 2500 else "")
+                    self._content_sig.emit(f"Document Uploaded: {p.name}", f"### Preview of `{p.name}`\n```\n{preview}\n```\n\n*Drop more files anytime to inspect, edit, or analyze.*")
+                else:
+                    self._content_sig.emit(f"File Uploaded: {p.name}", f"**Location:** `{p}`\n\nFile received and indexed for processing.")
+            except Exception:
+                self._content_sig.emit(f"File Uploaded: {p.name}", f"**Location:** `{p}`\n\nReady for processing.")
         if self._customize_overlay and self._customize_overlay.isVisible():
             ow, oh = CustomizeOverlay._OW, CustomizeOverlay._OH
             self._customize_overlay.setGeometry(

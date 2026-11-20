@@ -1330,6 +1330,11 @@ class JarvisLive:
     def interrupt(self) -> None:
         """Stop JARVIS mid-speech: drain queued audio and open mic immediately."""
         self._interrupted = True
+        if getattr(self, "_out_stream", None) is not None:
+            try:
+                self._out_stream.abort()
+            except Exception:
+                pass
         q = self.audio_in_queue
         if q:
             drained = 0
@@ -1824,14 +1829,14 @@ class JarvisLive:
             if jarvis_speaking:
                 # ── Active Voice Barge-In / Interruption ─────────────────────
                 # Real-time interruption: If user starts speaking while JARVIS is speaking,
-                # detect the user's voice, cancel playback immediately, and open the mic.
+                # immediately stop playback and open the mic without delay.
                 try:
                     lvl = _pcm_level(indata)
-                    if lvl > 0.08 and self._echo.is_user_speech(indata, SEND_SAMPLE_RATE, lvl):
+                    if lvl > 0.025:
                         self._user_speech_run = getattr(self, "_user_speech_run", 0) + 1
-                        if self._user_speech_run >= max(2, self._echo.required_blocks // 2):
+                        if self._user_speech_run >= 2:
                             self._user_speech_run = 0
-                            print("[JARVIS] ⚡ Voice interruption detected — stopping playback.")
+                            print(f"[JARVIS] ⚡ Voice interruption detected (level={lvl:.3f}) — cutting speech.")
                             self.interrupt()
                             return
                     else:
@@ -2132,6 +2137,7 @@ class JarvisLive:
         # assuming. This is what the echo tail is sized from, so a machine with a
         # large audio buffer gets a correspondingly longer guard — and one with a
         # tiny buffer is not penalised with a delay it does not need.
+        self._out_stream = stream
         try:
             lat = float(getattr(stream, "latency", 0.0) or 0.0)
             if 0.0 < lat < 1.0:
@@ -2229,6 +2235,7 @@ class JarvisLive:
             raise
         finally:
             self.set_speaking(False)
+            self._out_stream = None
             stream.stop()
             stream.close()
 
