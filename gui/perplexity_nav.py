@@ -62,7 +62,8 @@ class NavItemButton(QPushButton):
             self.setText(self._icon_str)
         else:
             badge = f"  [{self._badge_text}]" if self._badge_text else ""
-            self.setText(f" {self._icon_str}   {self._label_str}{badge}")
+            display_str = f" {self._icon_str}   {self._label_str}{badge}".replace("&", "&&")
+            self.setText(display_str)
 
     def _apply_style(self):
         align = "center" if self._collapsed else "left"

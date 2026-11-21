@@ -88,8 +88,8 @@ def _read_full_config() -> dict:
 APP_VERSION  = "MARK LVII"
 APP_PROTOCOL = APP_VERSION.split()[-1]
 
-_DEFAULT_W, _DEFAULT_H = 980, 700
-_MIN_W,     _MIN_H     = 820, 580
+_DEFAULT_W, _DEFAULT_H = 1260, 800
+_MIN_W,     _MIN_H     = 940, 620
 _LEFT_W  = 148
 _RIGHT_W = 340
 

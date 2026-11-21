@@ -28,9 +28,11 @@ class SuggestionPill(QPushButton):
 
     def __init__(self, icon: str, text: str, parent=None):
         super().__init__(parent)
-        self.setText(f"{icon}  {text}")
+        self.setText(f"{icon}  {text}".replace("&", "&&"))
+        self.setToolTip(text)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedHeight(34)
+        self.setFixedHeight(38)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setStyleSheet(f"""
             QPushButton {{
                 background: {C.PANEL};
@@ -457,8 +459,9 @@ class PerplexityWorkspace(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Top Minimal Navigation Bar ────────────────────────────────────
-        root.addWidget(self._build_top_nav())
+        # ── Top Minimal Navigation Bar (Hidden as MainWindow header owns unified pills) ────
+        self._top_nav = self._build_top_nav()
+        self._top_nav.hide()
 
         # ── Main Stacked View (3 Modes) ───────────────────────────────────
         self._stack = QStackedWidget()
@@ -570,31 +573,36 @@ class PerplexityWorkspace(QWidget):
         self._search_lay.setContentsMargins(0, 0, 0, 0)
         self._search_lay.setSpacing(12)
 
-        # Hero Welcome Section
+        # Hero Welcome Section (Claude & Perplexity style)
         self._search_hero = QWidget()
         self._search_hero.setStyleSheet("background: transparent;")
         hero_lay = QVBoxLayout(self._search_hero)
-        hero_lay.setContentsMargins(10, 24, 10, 16)
-        hero_lay.setSpacing(10)
+        hero_lay.setContentsMargins(16, 28, 16, 16)
+        hero_lay.setSpacing(12)
         hero_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         h_title = QLabel("Good to see you. How can I help?")
-        h_title.setFont(hud_font(20, QFont.Weight.Bold))
+        h_title.setFont(px_font(24, QFont.Weight.Bold))
         h_title.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
         h_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        h_title.setWordWrap(True)
         hero_lay.addWidget(h_title)
 
         h_sub = QLabel("Search the web, solve complex academic assignments, or analyze code with real citations.")
         h_sub.setFont(px_font(13))
         h_sub.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
         h_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        h_sub.setWordWrap(True)
         hero_lay.addWidget(h_sub)
 
-        # Suggestion Pills Grid
-        grid_w = QWidget()
-        grid_w.setStyleSheet("background: transparent;")
-        grid = QGridLayout(grid_w)
-        grid.setSpacing(8)
+        # Suggestion Pills Grid (Centered, Max 780px wide)
+        self._search_grid_w = QWidget()
+        self._search_grid_w.setMaximumWidth(780)
+        self._search_grid_w.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self._search_grid_w.setStyleSheet("background: transparent;")
+        self._search_grid = QGridLayout(self._search_grid_w)
+        self._search_grid.setContentsMargins(0, 10, 0, 10)
+        self._search_grid.setSpacing(10)
 
         suggestions = [
             ("🌐", "Explain quantum computing from first principles"),
@@ -604,12 +612,15 @@ class PerplexityWorkspace(QWidget):
             ("⚡", "Compare AI Agent frameworks: LangGraph vs Autogen vs AGY"),
             ("📰", "What are the latest AI and tech breakthroughs today?"),
         ]
+        self._search_pills = []
         for idx, (icon, text) in enumerate(suggestions):
             pill = SuggestionPill(icon, text)
+            pill.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             pill.clicked.connect(lambda _, t=text: self.prompt_selected.emit(t))
-            grid.addWidget(pill, idx // 2, idx % 2)
+            self._search_pills.append(pill)
+            self._search_grid.addWidget(pill, idx // 2, idx % 2)
 
-        hero_lay.addWidget(grid_w)
+        hero_lay.addWidget(self._search_grid_w, alignment=Qt.AlignmentFlag.AlignCenter)
         self._search_lay.addWidget(self._search_hero)
         self._search_lay.addStretch()
 
@@ -636,30 +647,35 @@ class PerplexityWorkspace(QWidget):
         self._chat_lay.setContentsMargins(0, 0, 0, 0)
         self._chat_lay.setSpacing(10)
 
-        # Chat Hero Welcome
+        # Chat Hero Welcome (Claude & Perplexity style)
         self._chat_hero = QWidget()
         self._chat_hero.setStyleSheet("background: transparent;")
         c_hero_lay = QVBoxLayout(self._chat_hero)
-        c_hero_lay.setContentsMargins(10, 24, 10, 16)
-        c_hero_lay.setSpacing(10)
+        c_hero_lay.setContentsMargins(16, 28, 16, 16)
+        c_hero_lay.setSpacing(12)
         c_hero_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         c_title = QLabel("JARVIS Personal Assistant")
-        c_title.setFont(hud_font(20, QFont.Weight.Bold))
+        c_title.setFont(px_font(24, QFont.Weight.Bold))
         c_title.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
         c_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        c_title.setWordWrap(True)
         c_hero_lay.addWidget(c_title)
 
         c_sub = QLabel("Autonomous coding agent, document studio, system diagnostics, and communication hub.")
         c_sub.setFont(px_font(13))
         c_sub.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
         c_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        c_sub.setWordWrap(True)
         c_hero_lay.addWidget(c_sub)
 
-        c_grid_w = QWidget()
-        c_grid_w.setStyleSheet("background: transparent;")
-        c_grid = QGridLayout(c_grid_w)
-        c_grid.setSpacing(8)
+        self._chat_grid_w = QWidget()
+        self._chat_grid_w.setMaximumWidth(780)
+        self._chat_grid_w.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self._chat_grid_w.setStyleSheet("background: transparent;")
+        self._chat_grid = QGridLayout(self._chat_grid_w)
+        self._chat_grid.setContentsMargins(0, 10, 0, 10)
+        self._chat_grid.setSpacing(10)
 
         chat_suggestions = [
             ("💻", "Inspect this repository and clean temp caches"),
@@ -667,12 +683,15 @@ class PerplexityWorkspace(QWidget):
             ("💬", "WhatsApp Mummy saying I will be home in 10 minutes"),
             ("🧩", "List installed plugins and system capabilities"),
         ]
+        self._chat_pills = []
         for idx, (icon, text) in enumerate(chat_suggestions):
             pill = SuggestionPill(icon, text)
+            pill.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             pill.clicked.connect(lambda _, t=text: self.prompt_selected.emit(t))
-            c_grid.addWidget(pill, idx // 2, idx % 2)
+            self._chat_pills.append(pill)
+            self._chat_grid.addWidget(pill, idx // 2, idx % 2)
 
-        c_hero_lay.addWidget(c_grid_w)
+        c_hero_lay.addWidget(self._chat_grid_w, alignment=Qt.AlignmentFlag.AlignCenter)
         self._chat_lay.addWidget(self._chat_hero)
         self._chat_lay.addStretch()
 
@@ -776,3 +795,33 @@ class PerplexityWorkspace(QWidget):
         vs = scroll.verticalScrollBar()
         if vs:
             vs.setValue(vs.maximum())
+
+    def _reflow_grids(self):
+        w = self.width()
+        cols = 1 if w < 780 else 2
+        if getattr(self, "_current_grid_cols", None) == cols:
+            return
+        self._current_grid_cols = cols
+
+        # Reflow search pills
+        if hasattr(self, "_search_pills") and hasattr(self, "_search_grid"):
+            for pill in self._search_pills:
+                self._search_grid.removeWidget(pill)
+            for idx, pill in enumerate(self._search_pills):
+                r = idx if cols == 1 else idx // cols
+                c = 0 if cols == 1 else idx % cols
+                self._search_grid.addWidget(pill, r, c)
+
+        # Reflow chat pills
+        if hasattr(self, "_chat_pills") and hasattr(self, "_chat_grid"):
+            for pill in self._chat_pills:
+                self._chat_grid.removeWidget(pill)
+            for idx, pill in enumerate(self._chat_pills):
+                r = idx if cols == 1 else idx // cols
+                c = 0 if cols == 1 else idx % cols
+                self._chat_grid.addWidget(pill, r, c)
+
+    def resizeEvent(self, event: QResizeEvent):
+        super().resizeEvent(event)
+        self._reflow_grids()
+

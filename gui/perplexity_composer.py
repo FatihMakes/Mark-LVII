@@ -91,11 +91,14 @@ class PerplexityComposer(QWidget):
         self.setStyleSheet("background: transparent;")
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 4, 12, 12)
-        root.setSpacing(4)
+        root.setContentsMargins(16, 4, 16, 12)
+        root.setSpacing(0)
+        root.setAlignment(Qt.AlignmentFlag.AlignHCenter)
 
-        # ── Card Container ────────────────────────────────────────────────
+        # ── Card Container (Centered, Claude & Perplexity style) ───────────
         self._card = QFrame()
+        self._card.setMaximumWidth(820)
+        self._card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._card.setStyleSheet(f"""
             QFrame {{
                 background: {C.PANEL};

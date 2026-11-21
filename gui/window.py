@@ -137,14 +137,15 @@ class MainWindow(QMainWindow):
             apply_ui_accent(_ui_color)
 
         self.setWindowTitle(f"{_display} — {APP_VERSION}")
-        self.setMinimumSize(_MIN_W, _MIN_H)
-        self.resize(_DEFAULT_W, _DEFAULT_H)
-        self.setAcceptDrops(True)
-
         screen = QApplication.primaryScreen().availableGeometry()
+        w = max(1120, min(screen.width() - 40, 1340))
+        h = max(720, min(screen.height() - 60, 840))
+        self.setMinimumSize(_MIN_W, _MIN_H)
+        self.resize(w, h)
+        self.setAcceptDrops(True)
         self.move(
-            (screen.width()  - _DEFAULT_W) // 2,
-            (screen.height() - _DEFAULT_H) // 2,
+            (screen.width()  - w) // 2,
+            (screen.height() - h) // 2,
         )
 
         self.on_text_command   = None
@@ -1396,88 +1397,174 @@ class MainWindow(QMainWindow):
 
     def _build_header(self) -> QWidget:
         w = HeaderBar()
-        w.setFixedHeight(58)
+        w.setFixedHeight(48)
         self._header = w
         lay = QHBoxLayout(w)
-        lay.setContentsMargins(14, 6, 14, 8)
-        lay.setSpacing(10)
+        lay.setContentsMargins(14, 0, 14, 0)
+        lay.setSpacing(8)
         lay.addWidget(ArcLogo())
 
         name_col = QVBoxLayout()
         name_col.setSpacing(0)
         display = self._assistant_name.upper()
         self._title_lbl = QLabel(display)
-        self._title_lbl.setFont(px_font(19, QFont.Weight.Light, spacing=3.5))
+        self._title_lbl.setFont(px_font(13, QFont.Weight.Bold, spacing=2.0))
         self._title_lbl.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
         self._title_lbl.setToolTip(self._subtitle(display))
         name_col.addWidget(self._title_lbl)
-        self._sub_lbl = QLabel(f"{APP_VERSION}  ·  PERSONAL AI SYSTEM")
-        self._sub_lbl.setFont(px_font(9, QFont.Weight.DemiBold, spacing=2.2))
-        self._sub_lbl.setStyleSheet(f"color: {C.PRI_DIM}; background: transparent;")
+        self._sub_lbl = QLabel(f"{APP_VERSION}")
+        self._sub_lbl.setFont(px_font(8, QFont.Weight.DemiBold, spacing=1.2))
+        self._sub_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
         name_col.addWidget(self._sub_lbl)
         lay.addLayout(name_col)
-        lay.addSpacing(8)
+        lay.addSpacing(10)
 
-        # Two drawers, and the split is by how often a thing is touched: the
-        # ones you set once behind the gear, the everyday switches behind the
-        # sliders. Separating them is what keeps each list short enough to
-        # read at a glance.
-        self._drawer_btn = IconButton("gear", 32)
-        self._drawer_btn.setCheckable(True)
-        self._drawer_btn.setToolTip("Setup — things you set once")
-        self._drawer_btn.clicked.connect(self._toggle_drawer)
-        lay.addWidget(self._drawer_btn)
-        self._ctrl_btn = IconButton("sliders", 32)
-        self._ctrl_btn.setCheckable(True)
-        self._ctrl_btn.setToolTip("Controls — the everyday switches")
-        self._ctrl_btn.clicked.connect(self._toggle_controls)
-        lay.addWidget(self._ctrl_btn)
+        # ── Unified Mode Switcher Pills (Perplexity & Claude style) ─────────
+        self._header_mode_pills = []
+        pills_data = [("🌐 AI Search", 0), ("💬 Assistant", 1), ("⚛ Voice HUD", 2)]
+        for label, idx in pills_data:
+            btn = QPushButton(label)
+            btn.setFixedHeight(28)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFont(px_font(11, QFont.Weight.DemiBold))
+            btn.clicked.connect(lambda _, i=idx: self._on_sidebar_mode(i))
+            self._header_mode_pills.append(btn)
+            lay.addWidget(btn)
 
-        self._upload_btn = QPushButton("📎 UPLOAD")
-        self._upload_btn.setFont(hud_font(8, QFont.Weight.Bold))
-        self._upload_btn.setFixedHeight(28)
+        self._update_header_mode_pills(0)
+        lay.addStretch()
+
+        # Engine Status Pill (clickable to open engine & providers overlay)
+        self._header_engine_btn = QPushButton("● GEMINI LIVE")
+        self._header_engine_btn.setFixedHeight(24)
+        self._header_engine_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._header_engine_btn.setFont(px_font(9.5, QFont.Weight.Bold, mono=True))
+        self._header_engine_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C.PANEL2};
+                color: {C.GREEN};
+                border: 1px solid {C.BORDER};
+                border-radius: 12px;
+                padding: 0 10px;
+            }}
+            QPushButton:hover {{
+                border-color: {C.GREEN};
+            }}
+        """)
+        self._header_engine_btn.clicked.connect(self._open_providers)
+        lay.addWidget(self._header_engine_btn)
+
+        # State Chip (Listening / Speaking / Standby)
+        self._state_chip = StateChip()
+        lay.addWidget(self._state_chip)
+
+        # Sources / Context Panel Toggle Pill
+        self._sources_toggle_btn = QPushButton("◨ Sources")
+        self._sources_toggle_btn.setFixedHeight(26)
+        self._sources_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._sources_toggle_btn.setFont(px_font(10, QFont.Weight.DemiBold))
+        self._sources_toggle_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C.PANEL};
+                color: {C.TEXT_MED};
+                border: 1px solid {C.BORDER};
+                border-radius: 6px;
+                padding: 0 9px;
+            }}
+            QPushButton:hover {{
+                color: {C.PRI};
+                border-color: {C.BORDER_B};
+            }}
+        """)
+        self._sources_toggle_btn.clicked.connect(self._toggle_context_panel)
+        lay.addWidget(self._sources_toggle_btn)
+
+        # Upload Button
+        self._upload_btn = QPushButton("📎 Upload")
+        self._upload_btn.setFont(px_font(10, QFont.Weight.DemiBold))
+        self._upload_btn.setFixedHeight(26)
         self._upload_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._upload_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C.PANEL};
-                color: {C.PRI};
+                color: {C.TEXT};
                 border: 1px solid {C.BORDER};
-                border-radius: 4px;
-                padding: 4px 10px;
+                border-radius: 6px;
+                padding: 0 9px;
             }}
             QPushButton:hover {{
-                background: {C.PRI};
-                color: {C.BG};
+                background: #1B1B1B;
+                border-color: {C.BORDER_B};
+                color: {C.WHITE};
             }}
         """)
         self._upload_btn.setToolTip("Upload Files, Images, or Folders (Claude / ChatGPT style)")
         self._upload_btn.clicked.connect(self._prompt_upload)
         lay.addWidget(self._upload_btn)
-        lay.addStretch()
 
-        self._state_chip = StateChip()
-        lay.addWidget(self._state_chip)
-        lay.addStretch()
+        # Two drawers: Setup (gear) and Controls (sliders)
+        self._drawer_btn = IconButton("gear", 28)
+        self._drawer_btn.setCheckable(True)
+        self._drawer_btn.setToolTip("Setup — engine, keys, memory, plugins")
+        self._drawer_btn.clicked.connect(self._toggle_drawer)
+        lay.addWidget(self._drawer_btn)
+
+        self._ctrl_btn = IconButton("sliders", 28)
+        self._ctrl_btn.setCheckable(True)
+        self._ctrl_btn.setToolTip("Controls — wake word, brief, HUD")
+        self._ctrl_btn.clicked.connect(self._toggle_controls)
+        lay.addWidget(self._ctrl_btn)
 
         clock_col = QVBoxLayout()
         clock_col.setSpacing(0)
         self._clock_lbl = QLabel("00:00:00")
-        self._clock_lbl.setFont(px_font(22, QFont.Weight.Light, mono=True, spacing=1))
-        self._clock_lbl.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
+        self._clock_lbl.setFont(px_font(13, QFont.Weight.Normal, mono=True))
+        self._clock_lbl.setStyleSheet(f"color: {C.TEXT}; background: transparent;")
         self._clock_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
         clock_col.addWidget(self._clock_lbl)
         self._date_lbl = QLabel("")
-        self._date_lbl.setFont(px_font(9, QFont.Weight.DemiBold, spacing=1.6))
-        self._date_lbl.setStyleSheet(f"color: {C.PRI_DIM}; background: transparent;")
+        self._date_lbl.setFont(px_font(8, QFont.Weight.Normal))
+        self._date_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
         self._date_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
         clock_col.addWidget(self._date_lbl)
         lay.addLayout(clock_col)
-        lay.addSpacing(4)
-        self._fs_btn = IconButton("expand", 32)
+        lay.addSpacing(2)
+
+        self._fs_btn = IconButton("expand", 28)
         self._fs_btn.setToolTip("Fullscreen  [F11]")
         self._fs_btn.clicked.connect(self._toggle_fullscreen)
         lay.addWidget(self._fs_btn)
         return w
+
+    def _update_header_mode_pills(self, active_idx: int):
+        if not hasattr(self, "_header_mode_pills"):
+            return
+        for i, btn in enumerate(self._header_mode_pills):
+            if i == active_idx:
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background: #1C1C1C;
+                        color: {C.WHITE};
+                        border: 1px solid {C.BORDER_B};
+                        border-radius: 6px;
+                        padding: 0 11px;
+                        font-weight: bold;
+                    }}
+                """)
+            else:
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background: transparent;
+                        color: {C.TEXT_MED};
+                        border: 1px solid transparent;
+                        border-radius: 6px;
+                        padding: 0 11px;
+                    }}
+                    QPushButton:hover {{
+                        background: #141414;
+                        color: {C.TEXT};
+                    }}
+                """)
 
     def _tick_clock(self):
         self._clock_lbl.setText(time.strftime("%H:%M:%S"))
@@ -1810,6 +1897,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_tasks_box"):
             self._context_panel.set_tasks_widget(self._tasks_box)
         self._context_panel.close_requested.connect(lambda: self._context_panel.hide())
+        self._context_panel.hide()  # Collapsed by default on home/welcome screen for spacious layout!
         return self._context_panel
 
     def _build_quick_drawer(self) -> QWidget:
@@ -3161,6 +3249,7 @@ class MainWindow(QMainWindow):
             return
         self._mode_switching = True
         try:
+            self._update_header_mode_pills(idx)
             if hasattr(self, "_workspace") and self._workspace.get_mode() != idx:
                 self._workspace.set_mode(idx)
             if hasattr(self, "_sidebar"):
@@ -3199,7 +3288,33 @@ class MainWindow(QMainWindow):
 
     def _toggle_context_panel(self):
         if hasattr(self, "_context_panel"):
-            self._context_panel.setVisible(not self._context_panel.isVisible())
+            vis = not self._context_panel.isVisible()
+            self._context_panel.setVisible(vis)
+            if hasattr(self, "_sources_toggle_btn"):
+                if vis:
+                    self._sources_toggle_btn.setStyleSheet(f"""
+                        QPushButton {{
+                            background: {C.PANEL2};
+                            color: {C.PRI};
+                            border: 1px solid {C.PRI_DIM};
+                            border-radius: 6px;
+                            padding: 0 9px;
+                        }}
+                    """)
+                else:
+                    self._sources_toggle_btn.setStyleSheet(f"""
+                        QPushButton {{
+                            background: {C.PANEL};
+                            color: {C.TEXT_MED};
+                            border: 1px solid {C.BORDER};
+                            border-radius: 6px;
+                            padding: 0 9px;
+                        }}
+                        QPushButton:hover {{
+                            color: {C.PRI};
+                            border-color: {C.BORDER_B};
+                        }}
+                    """)
 
     def _on_composer_file_cleared(self):
         self._last_selected_file = None

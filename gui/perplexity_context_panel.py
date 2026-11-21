@@ -128,6 +128,13 @@ def parse_sources_from_text(raw_text: str) -> list[dict]:
             slug = re.sub(r"\.[a-zA-Z0-9]+$", "", slug)
             title = slug.title() if (slug and len(slug) > 3) else f"{publisher} Resource"
 
+        # Clean markdown asterisks and polish title
+        title = re.sub(r"\*\*([^*]+)\*\*", r"\1", title).replace("**", "").strip(" -:—·")
+        if ":" in title:
+            p_parts = title.split(":", 1)
+            if 4 <= len(p_parts[0].strip()) <= 50:
+                title = p_parts[0].strip()
+
         sources.append({
             "index": idx,
             "title": title[:90],
@@ -226,7 +233,7 @@ class PerplexityContextPanel(QWidget):
         self._sources_cache: list[dict] = []
         self._current_attached_file: str | None = None
 
-        self.setFixedWidth(320)
+        self.setFixedWidth(270)
         self.setStyleSheet(f"""
             QWidget#PerplexityContextPanel {{
                 background: {C.BG};
@@ -236,21 +243,34 @@ class PerplexityContextPanel(QWidget):
         self.setObjectName("PerplexityContextPanel")
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(8, 8, 8, 8)
+        root.setContentsMargins(6, 6, 6, 6)
         root.setSpacing(6)
 
         # ── Top Bar: Tab Switcher + Close Button ───────────────────────────
         top_bar = QHBoxLayout()
         top_bar.setContentsMargins(2, 0, 2, 2)
-        top_bar.setSpacing(4)
+        top_bar.setSpacing(2)
 
         self._tab_btns = []
         tab_names = [("Sources", "📑"), ("Comms", "💬"), ("Activity", "📊"), ("Tasks", "⚡")]
         for i, (name, icon) in enumerate(tab_names):
             b = QPushButton(f"{icon} {name}")
-            b.setFixedHeight(26)
+            b.setFixedHeight(24)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
-            b.setFont(px_font(10, QFont.Weight.DemiBold))
+            b.setFont(px_font(9, QFont.Weight.DemiBold))
+            b.setStyleSheet(f"""
+                QPushButton {{
+                    background: transparent;
+                    color: {C.TEXT_MED};
+                    border: 1px solid transparent;
+                    border-radius: 4px;
+                    padding: 0 4px;
+                }}
+                QPushButton:hover {{
+                    color: {C.TEXT};
+                    background: {C.PANEL};
+                }}
+            """)
             b.clicked.connect(lambda _, idx=i: self.set_current_tab(idx))
             self._tab_btns.append(b)
             top_bar.addWidget(b)
@@ -258,7 +278,7 @@ class PerplexityContextPanel(QWidget):
         top_bar.addStretch()
 
         self._close_btn = QPushButton("✕")
-        self._close_btn.setFixedSize(22, 22)
+        self._close_btn.setFixedSize(20, 20)
         self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._close_btn.setToolTip("Collapse panel")
         self._close_btn.setStyleSheet(f"""

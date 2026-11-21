@@ -1010,7 +1010,7 @@ class StateChip(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._state = "INITIALISING"
-        self.setFixedSize(196, 34)
+        self.setFixedSize(130, 26)
 
     def set_state(self, state: str) -> None:
         state = str(state or "").upper()
@@ -1025,21 +1025,16 @@ class StateChip(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         W, H = self.width(), self.height()
         col = qcol(getattr(C, self._COLOURS.get(self._state, "PRI")))
-        p.setBrush(QBrush(blend(col, 0.08)))
+        p.setBrush(QBrush(blend(col, 0.10)))
         p.setPen(QPen(qcol(C.BORDER), 1))
-        p.drawRoundedRect(QRectF(0.5, 0.5, W - 1, H - 1), 6, 6)
-        g = QRadialGradient(22, H / 2, 8)
-        g.setColorAt(0, with_alpha(col, 0.9))
-        g.setColorAt(1, with_alpha(col, 0.0))
+        p.drawRoundedRect(QRectF(0.5, 0.5, W - 1, H - 1), 13, 13)
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QBrush(g))
-        p.drawEllipse(QPointF(22, H / 2), 8, 8)
         p.setBrush(QBrush(col))
-        p.drawEllipse(QPointF(22, H / 2), 3.5, 3.5)
-        p.setFont(px_font(11, QFont.Weight.DemiBold, spacing=2.0))
+        p.drawEllipse(QPointF(14, H / 2), 3.5, 3.5)
+        p.setFont(px_font(9.5, QFont.Weight.Bold, spacing=1.2))
         p.setPen(QPen(col))
-        p.drawText(QRectF(38, 0, W - 44, H), Qt.AlignmentFlag.AlignVCenter,
-                   p.fontMetrics().elidedText(self._state, Qt.TextElideMode.ElideRight, int(W - 44)))
+        p.drawText(QRectF(24, 0, W - 28, H), Qt.AlignmentFlag.AlignVCenter,
+                   p.fontMetrics().elidedText(self._state, Qt.TextElideMode.ElideRight, int(W - 28)))
         p.end()
 
 
