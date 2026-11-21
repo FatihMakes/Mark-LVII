@@ -97,34 +97,33 @@ _OS = platform.system()  # "Windows" | "Darwin" | "Linux"
 
 
 class C:
-    BG        = "#00060a"
-    PANEL     = "#010d14"
-    PANEL2    = "#010f18"
-    BORDER    = "#0d3347"
-    BORDER_B  = "#1a5c7a"
-    BORDER_A  = "#0f4060"
-    PRI       = "#00d4ff"
-    PRI_DIM   = "#007a99"
-    PRI_GHO   = "#001f2e"
-    ACC       = "#ff6b00"
-    ACC2      = "#ffcc00"
-    GREEN     = "#00ff88"
-    GREEN_D   = "#00aa55"
-    RED       = "#ff3355"
-    MUTED_C   = "#ff3366"
-    TEXT      = "#8ffcff"
-    TEXT_DIM  = "#3a8a9a"
-    TEXT_MED  = "#5ab8cc"
-    WHITE     = "#d8f8ff"
-    DARK      = "#000d14"
-    BAR_BG    = "#011520"
+    BG        = "#080b12"      # Deep cosmic obsidian glass (Apple / Perplexity dark mode)
+    PANEL     = "#0f172a"      # Sleek dark slate glass card
+    PANEL2    = "#131d33"      # Secondary card / drawer glass
+    BORDER    = "#1e293b"      # Subtle, elegant dark slate border
+    BORDER_B  = "#334155"      # Interactive hover / active border
+    BORDER_A  = "#25344d"      # Subtle focus border
+    PRI       = "#00e5ff"      # Apple Siri iconic luminous electric cyan
+    PRI_DIM   = "#0284c7"      # Deep sky blue
+    PRI_GHO   = "#0c2338"      # Translucent glow tint for pills and badges
+    ACC       = "#f59e0b"      # Apple warm amber (status badges / highlights)
+    ACC2      = "#fbbf24"      # Bright golden highlight
+    GREEN     = "#10b981"      # Apple vibrant emerald (listening / online state)
+    GREEN_D   = "#059669"      # Emerald dim
+    RED       = "#f43f5e"      # Apple rose / coral (danger, interrupt)
+    MUTED_C   = "#fb7185"      # Rose muted
+    TEXT      = "#e2e8f0"      # Clean, comfortable, high-readability slate white
+    TEXT_DIM  = "#64748b"      # Subdued metadata / timestamps
+    TEXT_MED  = "#94a3b8"      # Medium slate secondary labels
+    WHITE     = "#ffffff"      # Pure high-contrast white for headers and titles
+    DARK      = "#0a0e1a"      # Deepest obsidian
+    BAR_BG    = "#1a2333"      # Progress bar trough
 
 
-# Keys tied to the accent colour — status colours (ACC, GREEN, RED…) stay fixed
+# Keys tied to the accent colour — text and status colours stay crisp & neutral
 _HUE_LINKED = (
     "BG", "PANEL", "PANEL2", "BORDER", "BORDER_B", "BORDER_A",
-    "PRI", "PRI_DIM", "PRI_GHO", "TEXT", "TEXT_DIM", "TEXT_MED",
-    "WHITE", "DARK", "BAR_BG",
+    "PRI", "PRI_DIM", "PRI_GHO", "DARK", "BAR_BG",
 )
 _PALETTE_DEFAULTS: dict[str, str] = {k: getattr(C, k) for k in _HUE_LINKED}
 

@@ -386,6 +386,23 @@ def _is_repeat_chunk(txt: str, buf: list) -> bool:
     joined = " ".join(buf)
     return txt in joined
 
+def _join_transcript_tokens(tokens: list[str]) -> str:
+    res = ""
+    for t in tokens:
+        if not t:
+            continue
+        t = t.strip()
+        if not t:
+            continue
+        if not res:
+            res = t
+        elif any("\u0900" <= c <= "\u097F" for c in t) and any("\u0900" <= c <= "\u097F" for c in res[-1]):
+            res += t
+        else:
+            res += " " + t
+    return res.strip()
+
+
 def _clean_transcript(text: str) -> str:    
     text = _CTRL_RE.sub("", text)
     text = re.sub(r"[\x00-\x08\x0b-\x1f]", "", text)
@@ -2040,17 +2057,7 @@ class JarvisLive:
                             if txt:
                                 in_buf.append(txt)
                                 self._last_user_speech = time.monotonic()
-                                if txt != self._last_user_logged:
-                                    self._last_user_logged = txt
-                                    self._last_out_logged = ""
-                                    self.ui.write_log(f"You: {txt}")
-                                    self.ui.set_state("THINKING")
-                                    if self._dashboard:
-                                        asyncio.create_task(self._dashboard.broadcast({
-                                            "type": "log", "speaker": "user",
-                                            "text": txt,
-                                            "ts": datetime.now().isoformat(),
-                                        }))
+                                self.ui.set_state("THINKING")
 
                         if sc.turn_complete:
                             if self._turn_done_event:
@@ -2065,7 +2072,7 @@ class JarvisLive:
                                 self._visemes.reset()
                                 continue
 
-                            full_in = " ".join(in_buf).strip()
+                            full_in = _join_transcript_tokens(in_buf)
                             if full_in and full_in != self._last_user_logged:
                                 self._last_user_logged = full_in
                                 self._last_out_logged = ""   # new exchange

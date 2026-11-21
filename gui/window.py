@@ -2019,11 +2019,19 @@ class MainWindow(QMainWindow):
         label, dash, rest = str(title or "").partition(" — ")
         self._content_title_lbl.setText((label.upper() + dash + rest)[:48])
         self._content_ts_lbl.setText(_time.strftime("%H:%M:%S"))
-        self._content_display.setPlainText(text)
+        if text.strip().startswith(("<html", "<!DOCTYPE")):
+            self._content_display.setHtml(text)
+        elif any(sym in text for sym in ("# ", "## ", "### ", "**", "```", "- ", "* ", "1. ")):
+            try:
+                self._content_display.setMarkdown(text)
+            except Exception:
+                self._content_display.setPlainText(text)
+        else:
+            self._content_display.setPlainText(text)
         self._content_display.moveCursor(
             self._content_display.textCursor().MoveOperation.Start
         )
-        self._reveal_below_hud(self._content_panel, 220)
+        self._reveal_below_hud(self._content_panel, 260)
 
     # ── the coding agent, live ───────────────────────────────────────────────
     # The panel under the head shows a coding job while it runs: what was asked,

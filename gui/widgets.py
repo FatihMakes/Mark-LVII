@@ -176,10 +176,10 @@ class LogWidget(QTextEdit):
     def _colours(tag: str) -> tuple[QColor, QColor]:
         """(label colour, words colour) for a tag."""
         return {
-            "you":  (qcol(C.WHITE), qcol(C.WHITE)),
-            "ai":   (qcol(C.PRI), qcol(C.TEXT)),
+            "you":  (qcol(C.PRI), qcol(C.WHITE)),
+            "ai":   (qcol(C.GREEN), qcol(C.TEXT)),
             "err":  (qcol(C.RED), qcol(C.RED)),
-            "file": (qcol(C.GREEN), qcol(C.TEXT)),
+            "file": (qcol(C.ACC), qcol(C.TEXT)),
             # SYS lines are the bulk of the log, so they sit back. TEXT_MED
             # follows the theme and drops the contrast to a level you read past.
             "sys":  (qcol(C.TEXT_DIM), qcol(C.TEXT_MED)),
@@ -621,40 +621,36 @@ class HoloPanel(QWidget):
             return
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         W, H = self.width(), self.height()
-        cut = 11
+        cut = 10
         g = QLinearGradient(0, 0, 0, H)
-        g.setColorAt(0.0, blend(C.PRI, 0.085))
-        g.setColorAt(0.18, blend(C.PRI, 0.045))
-        g.setColorAt(1.0, blend(C.PRI, 0.025))
+        g.setColorAt(0.0, QColor(C.PANEL))
+        g.setColorAt(1.0, QColor(C.PANEL2))
         p.setBrush(QBrush(g))
-        p.setPen(QPen(blend(C.PRI, 0.24), 1))
+        p.setPen(QPen(QColor(C.BORDER), 1))
         p.drawPolygon(chamfer(QRectF(0.5, 0.5, W - 1, H - 1), cut))
-        # lit edges: the two chamfers and a short run along from each
-        p.setPen(QPen(blend(C.PRI, 0.85), 1.6))
-        p.drawLine(QLineF(0.5, cut + 0.5, cut + 0.5, 0.5))
-        p.drawLine(QLineF(cut + 0.5, 0.5, cut + 44, 0.5))
-        p.drawLine(QLineF(W - 0.5, H - cut - 0.5, W - cut - 0.5, H - 0.5))
-        p.drawLine(QLineF(W - cut - 0.5, H - 0.5, W - cut - 34, H - 0.5))
+        # subtle illuminated top accent border
+        p.setPen(QPen(with_alpha(C.PRI, 0.45), 1.2))
+        p.drawLine(QLineF(cut + 0.5, 0.5, min(W - cut, cut + 50), 0.5))
         if self._title:
             p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QBrush(qcol(C.ACC)))
-            p.drawRect(QRectF(12, 11, 3, 10))
+            p.setBrush(QBrush(qcol(C.PRI)))
+            p.drawRoundedRect(QRectF(12, 10, 3, 11), 1.5, 1.5)
             right = self._header_right()
             code_w = 0.0
             if self._code:
-                p.setFont(px_font(10, mono=True))
+                p.setFont(px_font(9.5, mono=True))
                 code_w = p.fontMetrics().horizontalAdvance(self._code) + 8
-                p.setPen(QPen(blend(C.PRI, 0.5)))
+                p.setPen(QPen(qcol(C.TEXT_DIM)))
                 p.drawText(QRectF(right - code_w, 6, code_w, 20),
                            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, self._code)
-            p.setFont(px_font(11, QFont.Weight.DemiBold, spacing=1.8))
-            p.setPen(QPen(qcol(C.PRI)))
+            p.setFont(px_font(11, QFont.Weight.DemiBold, spacing=1.2))
+            p.setPen(QPen(qcol(C.WHITE)))
             room = max(10.0, right - code_w - 26)
             p.drawText(QRectF(21, 6, room, 20), Qt.AlignmentFlag.AlignVCenter,
                        p.fontMetrics().elidedText(self._title, Qt.TextElideMode.ElideRight, int(room)))
             lg = QLinearGradient(12, 0, W - 12, 0)
-            lg.setColorAt(0.0, with_alpha(C.PRI, 0.55))
-            lg.setColorAt(0.6, with_alpha(C.PRI, 0.12))
+            lg.setColorAt(0.0, with_alpha(C.PRI, 0.35))
+            lg.setColorAt(0.5, with_alpha(C.PRI, 0.08))
             lg.setColorAt(1.0, with_alpha(C.PRI, 0.0))
             p.setPen(QPen(QBrush(lg), 1))
             p.drawLine(QLineF(12, self.HEADER, W - 12, self.HEADER))
@@ -1142,9 +1138,9 @@ class CommandFrame(QWidget):
         W, H = self.width(), self.height()
         fw = QApplication.focusWidget()
         focus = fw is not None and self.isAncestorOf(fw)
-        p.setBrush(QBrush(blend(C.PRI, 0.10 if focus else 0.06)))
-        p.setPen(QPen(blend(C.PRI, 0.95 if focus else 0.5), 1))
-        p.drawPolygon(chamfer(QRectF(0.5, 0.5, W - 1, H - 1), 8))
+        p.setBrush(QBrush(QColor(C.PANEL2)))
+        p.setPen(QPen(QColor(C.PRI if focus else C.BORDER_B), 1.2 if focus else 1.0))
+        p.drawRoundedRect(QRectF(0.5, 0.5, W - 1, H - 1), 8, 8)
         p.end()
 
 
