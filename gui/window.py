@@ -2035,25 +2035,40 @@ class MainWindow(QMainWindow):
             self._ctrl_btn.setChecked(False)
 
     def _place_drawer(self, drawer, left: int):
-        _W = 250
+        _W = 280
         drawer.setFixedWidth(_W)
         drawer.adjustSize()
-        top = self._header.height() + 2 if hasattr(self, "_header") else 60
+        top = self._header.height() + 4 if hasattr(self, "_header") else 50
+        cw = self.centralWidget()
+        max_left = max(12, cw.width() - _W - 12)
+        left = max(12, min(left, max_left))
         drawer.setGeometry(left, top, _W, drawer.sizeHint().height())
 
     def _position_quick_drawer(self):
         if hasattr(self, "_quick_drawer"):
-            self._place_drawer(self._quick_drawer, 12)
+            _W = 280
+            cw = self.centralWidget()
+            left = cw.width() - _W - 12
+            if hasattr(self, "_drawer_btn") and self._drawer_btn.isVisible():
+                try:
+                    btn_pt = self._drawer_btn.mapTo(cw, QPoint(0, 0))
+                    left = btn_pt.x() + self._drawer_btn.width() - _W
+                except Exception:
+                    pass
+            self._place_drawer(self._quick_drawer, left)
 
     def _position_ctrl_drawer(self):
-        # Under its own header button rather than under the other one's.
+        # Under its own header button rather than overflowing past the window edge
         if hasattr(self, "_ctrl_drawer"):
-            left = 12
-            try:
-                left = max(12, self._ctrl_btn.mapTo(self.centralWidget(),
-                                                    QPoint(0, 0)).x() - 8)
-            except Exception:
-                pass
+            _W = 280
+            cw = self.centralWidget()
+            left = cw.width() - _W - 12
+            if hasattr(self, "_ctrl_btn") and self._ctrl_btn.isVisible():
+                try:
+                    btn_pt = self._ctrl_btn.mapTo(cw, QPoint(0, 0))
+                    left = btn_pt.x() + self._ctrl_btn.width() - _W
+                except Exception:
+                    pass
             self._place_drawer(self._ctrl_drawer, left)
 
     def _build_input_row(self) -> QWidget:
@@ -3250,6 +3265,8 @@ class MainWindow(QMainWindow):
         if getattr(self, "_mode_switching", False):
             return
         self._mode_switching = True
+        self._close_setup()
+        self._close_controls()
         try:
             self._update_header_mode_pills(idx)
             if hasattr(self, "_workspace") and self._workspace.get_mode() != idx:
