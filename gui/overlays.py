@@ -508,9 +508,9 @@ class CustomizeOverlay(QWidget):
 
 
 class PluginManagerOverlay(QWidget):
-    """Floating overlay — lists discovered plugins with per-plugin ON/OFF toggles."""
+    """Floating overlay — lists discovered plugins with per-plugin ON/OFF toggles and instant test triggers."""
 
-    _OW = 420
+    _OW = 490
 
     def __init__(self, plugins: list[dict], parent=None):
         super().__init__(parent)
@@ -528,10 +528,16 @@ class PluginManagerOverlay(QWidget):
         lay.setContentsMargins(20, 16, 20, 16)
         lay.setSpacing(6)
 
-        hdr = QLabel("🧩  PLUGIN MANAGER")
-        hdr.setFont(hud_font(12, QFont.Weight.Bold))
-        hdr.setStyleSheet(f"color: {C.PRI}; background: transparent;")
+        hdr = QLabel("🧩  TORVIS & JARVIS EXTENSION SUITE")
+        hdr.setFont(hud_font(11, QFont.Weight.Bold))
+        hdr.setStyleSheet(f"color: {C.PRI}; background: transparent; letter-spacing: 0.8px;")
         lay.addWidget(hdr)
+
+        sub = QLabel("Autonomous ready-to-use plugins with 100% free cloud fallback:")
+        sub.setFont(hud_font(8))
+        sub.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
+        lay.addWidget(sub)
+
         sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
         lay.addWidget(sep)
@@ -545,7 +551,7 @@ class PluginManagerOverlay(QWidget):
         for p in plugins:
             lay.addLayout(self._build_row(p))
 
-        lay.addSpacing(4)
+        lay.addSpacing(6)
         close_btn = QPushButton("CLOSE")
         close_btn.setFixedHeight(30)
         close_btn.setFont(hud_font(9))
@@ -566,14 +572,29 @@ class PluginManagerOverlay(QWidget):
 
         label_text = p["name"] if p["valid"] else f"{p['name']}  (⚠ {p['file']})"
         lbl = QLabel(label_text)
-        lbl.setFont(hud_font(8))
+        lbl.setFont(hud_font(8, QFont.Weight.DemiBold))
         lbl.setStyleSheet(f"color: {C.TEXT if p['valid'] else C.TEXT_DIM}; background: transparent;")
         lbl.setToolTip(p["description"] if p["valid"] else p["error"])
         lbl.setWordWrap(False)
         row.addWidget(lbl, stretch=1)
 
+        if p["valid"]:
+            test_btn = QPushButton("TEST")
+            test_btn.setFixedSize(52, 24)
+            test_btn.setFont(hud_font(7, QFont.Weight.Bold))
+            test_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            test_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {C.PANEL}; color: {C.PRI};
+                    border: 1px solid {C.BORDER}; border-radius: 3px;
+                }}
+                QPushButton:hover {{ background: {C.HOVER}; border-color: {C.PRI}; color: {C.WHITE}; }}
+            """)
+            test_btn.clicked.connect(lambda _, name=p["name"]: self._run_test(name))
+            row.addWidget(test_btn)
+
         btn = QPushButton()
-        btn.setFixedSize(72, 24)
+        btn.setFixedSize(62, 24)
         btn.setFont(hud_font(7, QFont.Weight.Bold))
         if not p["valid"]:
             btn.setText("BROKEN")
@@ -590,6 +611,21 @@ class PluginManagerOverlay(QWidget):
             btn.clicked.connect(lambda _, name=p["name"], b=btn: self._toggle(name, b))
         row.addWidget(btn)
         return row
+
+    def _run_test(self, name: str):
+        prompts = {
+            "excel_writer": "Build an expense spreadsheet for this month (.xlsx)",
+            "smart_lights": "Turn my desk light to Arc Blue at 80% brightness",
+            "build_guide": "Prepare an optimal PC build configuration for $1500",
+            "telegram_remote": "Check 24/7 Telegram phone assistant bridge status",
+            "omninet_supertool": "Scrape the latest tech headlines and live forex rates",
+            "godmode_assistant": "Run system diagnostics and check disk health",
+        }
+        prompt = prompts.get(name, f"Run {name} plugin")
+        win = self.window()
+        if hasattr(win, "_send_text"):
+            win._send_text(prompt)
+        self.hide()
 
     def _style_toggle(self, btn: QPushButton, enabled: bool):
         if enabled:

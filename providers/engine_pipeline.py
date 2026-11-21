@@ -590,7 +590,9 @@ class PipelineEngine:
             # sits in THINKING for ever and the stall watchdog reconnects an
             # engine whose only problem was one bad request.
             self._report("the language model", self._llm, e)
-            await self._emit(Msg.said(_failure_line("the language model", e)))
+            fail_line = _failure_line("the language model", e)
+            await self._emit(Msg.said(fail_line))
+            await self._speak(fail_line)
             await self._emit(Msg.turn_end())
 
     async def _speak(self, text: str) -> None:

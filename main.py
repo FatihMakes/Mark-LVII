@@ -1178,9 +1178,11 @@ class JarvisLive:
     def _on_ui_mute_change(self, muted: bool):
         """Microphone muted or unmuted from UI controls or shortcuts."""
         if not muted:
-            self.wake(reason="microphone active")
+            self._interrupted = False
+            self._awake = True
             self._last_user_speech = time.monotonic()
-            print("[JARVIS] 🎤 Mic unmuted — resumed listening.")
+            self.ui.set_state("LISTENING")
+            print("[JARVIS] 🎤 Mic unmuted — resumed listening immediately.")
             if self.session is None:
                 self._conn_backoff = 1
                 self.request_reconnect(keep_context=True, reason="unmuted")
@@ -1263,10 +1265,30 @@ class JarvisLive:
                 getattr(self._dashboard, "_bind_error", "") or "")
 
     def _on_text_command(self, text: str):
-        if not self._loop or not self.session:
+        if not text:
             return
         if self._wake_enabled and not self._awake:
             self.wake(reason="typed command")
+        if not self._loop:
+            return
+        if not self.session:
+            print(f"[JARVIS] 💬 Queued command while connecting: {text}")
+            self.ui.write_log(f"SYS: Dispatching '{text}'...")
+            self._conn_backoff = 1
+            self.request_reconnect(keep_context=True, reason="text command")
+            async def _dispatch_when_ready():
+                for _ in range(60):
+                    if self.session:
+                        await self.session.send_client_content(
+                            turns={"role": "user", "parts": [{"text": text}]},
+                            turn_complete=True
+                        )
+                        return
+                    await asyncio.sleep(0.1)
+                print(f"[JARVIS] Dropped text command (session timeout): {text}")
+            asyncio.run_coroutine_threadsafe(_dispatch_when_ready(), self._loop)
+            return
+
         asyncio.run_coroutine_threadsafe(
             self.session.send_client_content(
                 turns={"role": "user", "parts": [{"text": text}]},
@@ -1918,6 +1940,16 @@ class JarvisLive:
                     self.ui.set_audio_level(_pcm_level(indata))
                 except Exception:
                     pass
+            elif self.ui.muted and not self._phone_active:
+                # Keepalive: send zero-amplitude PCM silence every ~1.5s to keep Gemini Live WebSocket alive
+                _now = time.monotonic()
+                if _now - getattr(self, "_last_mute_keepalive", 0.0) >= 1.5:
+                    self._last_mute_keepalive = _now
+                    silence = np.zeros(int(SEND_SAMPLE_RATE * 0.08), dtype=np.int16).tobytes()
+                    loop.call_soon_threadsafe(
+                        self.out_queue.put_nowait,
+                        {"data": silence, "mime_type": "audio/pcm"}
+                    )
 
         try:
             def _open_mic(dev):
@@ -2135,10 +2167,26 @@ class JarvisLive:
 
                     if response.tool_call:
                         fn_responses = []
-                        for fc in response.tool_call.function_calls:
+                        calls = response.tool_call.function_calls or []
+                        if len(calls) == 1:
+                            fc = calls[0]
                             print(f"[JARVIS] 📞 {fc.name}")
                             fr = await self._execute_tool(fc)
                             fn_responses.append(fr)
+                        elif len(calls) > 1:
+                            print(f"[JARVIS] 📞 Parallel execution of {len(calls)} tools: {[c.name for c in calls]}")
+                            async def _safe_run_tool(fc):
+                                try:
+                                    return await self._execute_tool(fc)
+                                except Exception as exc:
+                                    print(f"[JARVIS] ⚠️ Tool {fc.name} error: {exc}")
+                                    return types.FunctionResponse(
+                                        id=fc.id, name=fc.name,
+                                        response={"error": str(exc)}
+                                    )
+                            results = await asyncio.gather(*[_safe_run_tool(fc) for fc in calls])
+                            fn_responses.extend(results)
+
                         await self.session.send_tool_response(
                             function_responses=fn_responses
                         )
@@ -2604,28 +2652,29 @@ class JarvisLive:
                 )
                 if not text:
                     continue
-                # Wait up to 8s for session to become ready after a wake
-                for _ in range(80):
+                if self._wake_enabled and not self._awake:
+                    self.wake(reason="remote command")
+                # Wait up to 10s for session to become ready after a wake/command
+                if not self.session:
+                    self._conn_backoff = 1
+                    self.request_reconnect(keep_context=True, reason="remote command")
+                for _ in range(100):
                     if self.session:
                         break
                     await asyncio.sleep(0.1)
                 if self.session:
-                    # A remote command is deliberate control and the phone user
-                    # has no desktop WAKE button — so it wakes JARVIS if asleep.
-                    if self._wake_enabled and not self._awake:
-                        self.wake(reason="remote command")
                     await self.session.send_client_content(
                         turns={"role": "user", "parts": [{"text": text}]},
                         turn_complete=True,
                     )
-                    self.ui.write_log(f"[Web]: {text}")
+                    self.ui.write_log(f"[Remote]: {text}")
                 else:
-                    print(f"[Dashboard] Dropped command (no session): {text}")
+                    print(f"[Dashboard] Retrying/Dropped command (no session): {text}")
             except asyncio.TimeoutError:
                 pass
             except Exception as e:
                 print(f"[Dashboard] Command error: {e}")
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.3)
 
     # ── main loop ───────────────────────────────────────────────────────────
 

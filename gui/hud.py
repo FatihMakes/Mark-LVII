@@ -63,10 +63,6 @@ class HudCanvas(QWidget):
         self.state    = "INITIALISING"
         self._assistant_name = assistant_name
 
-        self._hovered_btn: str | None = None
-        self._btn_interrupt_rect: QRectF = QRectF()
-        self._btn_mic_rect: QRectF = QRectF()
-
         # The holographic head that fills the HUD. If it could not be imported
         # we fall back to the old glowing core so the panel is never empty.
         self._avatar = None

@@ -414,6 +414,7 @@ class MainWindow(QMainWindow):
 
         # Wire Context Panel actions
         self._context_panel.follow_up_clicked.connect(self._on_prompt_selected)
+        self._context_panel.torvis_action_triggered.connect(self._send_text)
 
         # Wire Universal Composer
         self._composer.submitted.connect(self._send_text)

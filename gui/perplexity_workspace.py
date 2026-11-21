@@ -620,12 +620,14 @@ class PerplexityWorkspace(QWidget):
         self._search_grid.setSpacing(10)
 
         suggestions = [
-            ("🌐", "Explain quantum computing from first principles"),
-            ("🛡", "Audit system security score & vulnerabilities"),
-            ("📈", "Generate quantitative trading signals for NVDA"),
-            ("📑", "Solve cloud security question bank unit 1 to 3 PDF"),
-            ("⚡", "Compare AI Agent frameworks: LangGraph vs Autogen vs AGY"),
-            ("📰", "What are the latest AI and tech breakthroughs today?"),
+            ("📊", "Build an expense spreadsheet for this month (.xlsx)"),
+            ("🖥️", "What is currently on my screen? (Autonomous vision)"),
+            ("🧹", "Tidy up my desktop into organized categories"),
+            ("💡", "Turn my desk light to Arc Blue at 80% brightness"),
+            ("📱", "Connect 24/7 Telegram phone assistant bridge"),
+            ("🎟️", "Find movie showtimes tonight & check ticket booking"),
+            ("💼", "Search software engineer jobs & email application"),
+            ("🛠️", "Prepare an optimal PC build guide for $1500"),
         ]
         self._search_pills = []
         for idx, (icon, text) in enumerate(suggestions):
@@ -694,10 +696,12 @@ class PerplexityWorkspace(QWidget):
         self._chat_grid.setSpacing(10)
 
         chat_suggestions = [
-            ("💻", "Inspect this repository and clean temp caches"),
-            ("📄", "Generate a detailed cover letter and PDF on desktop"),
-            ("💬", "WhatsApp Mummy saying I will be home in 10 minutes"),
-            ("🧩", "List installed plugins and system capabilities"),
+            ("📊", "Build an expense spreadsheet for this month (.xlsx)"),
+            ("🖥️", "What is currently on my screen? (Read & Click)"),
+            ("🧹", "Tidy up my desktop into organized categories"),
+            ("🎮", "Scan my Steam library and update installed games"),
+            ("🎟️", "Find movie showtimes tonight & reserve tickets"),
+            ("💼", "Search software engineering roles & draft resume"),
         ]
         self._chat_pills = []
         for idx, (icon, text) in enumerate(chat_suggestions):

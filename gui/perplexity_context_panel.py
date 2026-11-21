@@ -225,6 +225,7 @@ class PerplexityContextPanel(QWidget):
 
     close_requested = pyqtSignal()
     follow_up_clicked = pyqtSignal(str)
+    torvis_action_triggered = pyqtSignal(str)
 
     def __init__(self, log_widget: LogWidget, parent=None):
         super().__init__(parent)
@@ -314,11 +315,8 @@ class PerplexityContextPanel(QWidget):
         self._activity_lay.setSpacing(6)
         self._stack.addWidget(self._activity_page)
 
-        # Tab 3: Tasks Tab View (Background tasks & routines)
-        self._tasks_page = QWidget()
-        self._tasks_lay = QVBoxLayout(self._tasks_page)
-        self._tasks_lay.setContentsMargins(0, 0, 0, 0)
-        self._tasks_lay.setSpacing(6)
+        # Tab 3: Tasks Tab View (Torvis Suite & background routines)
+        self._tasks_page = self._build_tasks_page()
         self._stack.addWidget(self._tasks_page)
 
         root.addWidget(self._stack, stretch=1)
@@ -474,11 +472,135 @@ class PerplexityContextPanel(QWidget):
                     }}
                 """)
 
+    # ── TAB 3: Torvis Suite & Background Tasks Page ──────────────────────
+    def _build_tasks_page(self) -> QWidget:
+        w = QWidget()
+        w.setStyleSheet("background: transparent;")
+        root_lay = QVBoxLayout(w)
+        root_lay.setContentsMargins(0, 0, 0, 0)
+        root_lay.setSpacing(4)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }" + scroll_css())
+
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        lay = QVBoxLayout(container)
+        lay.setContentsMargins(0, 2, 4, 8)
+        lay.setSpacing(8)
+
+        # Header
+        hdr = QLabel("TORVIS ENTERPRISE SUITE")
+        hdr.setFont(px_font(10, QFont.Weight.Bold))
+        hdr.setStyleSheet(f"color: {C.PRI}; background: transparent; letter-spacing: 1px;")
+        lay.addWidget(hdr)
+
+        sub = QLabel("Autonomous capabilities ready to execute:")
+        sub.setFont(px_font(9))
+        sub.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
+        lay.addWidget(sub)
+
+        # Torvis action cards definition
+        torvis_cards = [
+            ("📊", "Excel Writer", "Build expense spreadsheets & tables", "Build an expense spreadsheet for this month with sample categories and totals"),
+            ("💡", "Smart Lights", "Control RGB desk lamp & lighting", "Turn desk light to Arc Blue at 80% brightness"),
+            ("🛠️", "PC Build Guide", "Component specs & compatibility audit", "Prepare an optimal PC build configuration for $1500 gaming and development"),
+            ("📱", "Telegram 24/7", "Smartphone bot bridge for remote PC", "Check 24/7 Telegram phone assistant bridge status"),
+            ("🖥️", "Screen Agent", "Analyze screen & autonomous clicker", "What is currently on my screen? Analyze open windows and text"),
+            ("🧹", "Tidy Desktop", "Organize desktop files into folders", "Tidy up my desktop into organized categories"),
+            ("🎮", "Steam Updater", "Scan & update Steam game library", "Scan my Steam library and check for game updates"),
+            ("🎟️", "Movie Tickets", "Find showtimes & book movie tickets", "Find top movie showtimes tonight and check ticket availability"),
+            ("💼", "Job Hunter", "Search openings & email applications", "Search software engineering job openings and tailor an application email"),
+            ("🌐", "OmniNet Scraper", "Web scraper, webhook dispatch & FX", "Scrape the latest tech headlines and live forex rates"),
+            ("🔍", "Reverse Engineering", "Inspect binary symbols, APKs & APIs", "Reverse engineer target API endpoints and extract request schema"),
+        ]
+
+        for icon, title, desc, prompt in torvis_cards:
+            card = QFrame()
+            card.setStyleSheet(f"""
+                QFrame {{
+                    background: {C.PANEL2};
+                    border: 1px solid {C.BORDER};
+                    border-radius: 6px;
+                }}
+                QFrame:hover {{
+                    border-color: {C.BORDER_B};
+                }}
+            """)
+            c_lay = QHBoxLayout(card)
+            c_lay.setContentsMargins(8, 6, 8, 6)
+            c_lay.setSpacing(6)
+
+            text_col = QVBoxLayout()
+            text_col.setContentsMargins(0, 0, 0, 0)
+            text_col.setSpacing(1)
+
+            t_lbl = QLabel(f"{icon}  {title}")
+            t_lbl.setFont(px_font(10, QFont.Weight.DemiBold))
+            t_lbl.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
+            text_col.addWidget(t_lbl)
+
+            d_lbl = QLabel(desc)
+            d_lbl.setFont(px_font(9))
+            d_lbl.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
+            text_col.addWidget(d_lbl)
+
+            c_lay.addLayout(text_col, stretch=1)
+
+            btn = QPushButton("Run")
+            btn.setFixedSize(38, 22)
+            btn.setFont(px_font(9, QFont.Weight.Bold))
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {C.PANEL};
+                    color: {C.PRI};
+                    border: 1px solid {C.BORDER};
+                    border-radius: 4px;
+                }}
+                QPushButton:hover {{
+                    background: {C.HOVER};
+                    border-color: {C.PRI};
+                    color: {C.WHITE};
+                }}
+            """)
+            btn.clicked.connect(lambda _, p=prompt: self.torvis_action_triggered.emit(p))
+            c_lay.addWidget(btn)
+
+            lay.addWidget(card)
+
+        # Slot for routines & system background tasks
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(f"color: {C.BORDER}; margin: 6px 0;")
+        lay.addWidget(sep)
+
+        task_hdr = QLabel("SCHEDULED TASKS & ROUTINES")
+        task_hdr.setFont(px_font(10, QFont.Weight.Bold))
+        task_hdr.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent; letter-spacing: 1px;")
+        lay.addWidget(task_hdr)
+
+        self._tasks_slot = QWidget()
+        self._tasks_slot.setStyleSheet("background: transparent;")
+        self._tasks_slot_lay = QVBoxLayout(self._tasks_slot)
+        self._tasks_slot_lay.setContentsMargins(0, 0, 0, 0)
+        self._tasks_slot_lay.setSpacing(4)
+        lay.addWidget(self._tasks_slot)
+
+        scroll.setWidget(container)
+        root_lay.addWidget(scroll, stretch=1)
+        return w
+
     def set_activity_widget(self, w: QWidget):
         self._activity_lay.addWidget(w, stretch=1)
 
     def set_tasks_widget(self, w: QWidget):
-        self._tasks_lay.addWidget(w, stretch=1)
+        if hasattr(self, "_tasks_slot_lay"):
+            self._tasks_slot_lay.addWidget(w, stretch=1)
+        elif hasattr(self, "_tasks_lay"):
+            self._tasks_lay.addWidget(w, stretch=1)
 
     def set_voice_state(self, state: str):
         if self._active_workspace_mode == 2:
