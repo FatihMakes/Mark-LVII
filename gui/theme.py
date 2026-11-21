@@ -97,28 +97,36 @@ _OS = platform.system()  # "Windows" | "Darwin" | "Linux"
 
 
 class C:
-    # ── Premium Perplexity-Inspired Black Design System ────────────────────────
-    BG        = "#080808"      # Main background: #080808
-    PANEL     = "#141414"      # Elevated surfaces: #141414
-    PANEL2    = "#0D0D0D"      # Secondary background: #0D0D0D
-    BORDER    = "#252525"      # Borders: #252525
-    BORDER_B  = "#383838"      # Interactive hover / active border
-    BORDER_A  = "#2A2A2A"      # Subtle focus border
-    PRI       = "#00D4FF"      # Subtle cyan/turquoise accent
-    PRI_DIM   = "#0284C7"      # Deep sky blue
-    PRI_GHO   = "#141E28"      # Translucent subtle tint
+    # ── Premium Deep-Black Dark Theme System ──────────────────────────────────
+    BG        = "#050505"      # Main app background & main voice/HUD canvas: #050505
+    SIDEBAR   = "#080808"      # Sidebar and top bar: #080808
+    TOPBAR    = "#080808"      # Top bar background: #080808
+    CANVAS    = "#050505"      # Main voice/HUD canvas: #050505
+    PANEL     = "#101010"      # Cards and panels: #101010
+    PANEL2    = "#0C0C0C"      # Nested secondary panels / cards: #0C0C0C
+    INPUT     = "#121212"      # Inputs and composer: #121212
+    HOVER     = "#1A1A1A"      # Hover surfaces: #1A1A1A
+    ACTIVE    = "#202020"      # Active / selected surfaces: #202020
+    BORDER    = "#303030"      # Standard visible borders: #303030
+    BORDER_B  = "#555555"      # Interactive control borders: #555555
+    BORDER_A  = "#404040"      # Focus / active borders: #404040
+    PRI       = "#22D3EE"      # Restrained cyan accent: #22D3EE
+    PRI_DIM   = "#0E7490"      # Deep cyan: #0E7490
+    PRI_GHO   = "#0F2830"      # Translucent subtle tint
     ACC       = "#F59E0B"      # Speaking state: warm amber #F59E0B
     ACC2      = "#D97706"      # Bright golden highlight
-    GREEN     = "#10B981"      # Active state: restrained green #10B981
-    GREEN_D   = "#059669"      # Emerald dim
-    RED       = "#EF4444"      # Muted state: soft red #EF4444
-    MUTED_C   = "#EF4444"      # Muted state: soft red #EF4444
+    GREEN     = "#4ADE80"      # Live/success green: #4ADE80
+    GREEN_D   = "#166534"      # Emerald dim: #166534
+    RED       = "#F87171"      # Muted/error red: #F87171
+    MUTED_C   = "#F87171"      # Muted state: soft red: #F87171
     TEXT      = "#F5F5F5"      # Primary text: #F5F5F5
-    TEXT_DIM  = "#71717A"      # Muted text: #71717A
-    TEXT_MED  = "#A1A1AA"      # Secondary text: #A1A1AA
+    TEXT_MED  = "#B8B8B8"      # Secondary text: #B8B8B8
+    TEXT_DIM  = "#949494"      # Muted readable text: #949494
+    ICON_PRI  = "#E5E5E5"      # Primary icons: #E5E5E5
+    ICON_SEC  = "#A6A6A6"      # Secondary icons: #A6A6A6
     WHITE     = "#FFFFFF"      # High contrast white
-    DARK      = "#080808"      # Deepest black
-    BAR_BG    = "#181818"      # Progress bar trough
+    DARK      = "#050505"      # Deepest black
+    BAR_BG    = "#1A1A1A"      # Progress bar trough
 
 
 # Keys tied to the accent colour — dark glass surfaces and typography stay crisp & neutral

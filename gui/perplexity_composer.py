@@ -101,7 +101,7 @@ class PerplexityComposer(QWidget):
         self._card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._card.setStyleSheet(f"""
             QFrame {{
-                background: {C.PANEL};
+                background: {C.INPUT};
                 border: 1px solid {C.BORDER};
                 border-radius: 12px;
             }}
@@ -178,7 +178,7 @@ class PerplexityComposer(QWidget):
         self._attach_btn.setToolTip("Attach a document, PDF, or code file")
         self._attach_btn.setStyleSheet(f"""
             QPushButton {{
-                background: {C.PANEL2};
+                background: {C.PANEL};
                 color: {C.TEXT_MED};
                 border: 1px solid {C.BORDER};
                 border-radius: 6px;
@@ -187,7 +187,7 @@ class PerplexityComposer(QWidget):
                 font-weight: 500;
             }}
             QPushButton:hover {{
-                background: #1B1B1B;
+                background: {C.HOVER};
                 color: {C.TEXT};
                 border-color: {C.BORDER_B};
             }}
@@ -202,7 +202,7 @@ class PerplexityComposer(QWidget):
         self._mode_btn.setToolTip("Switch query focus mode")
         self._mode_btn.setStyleSheet(f"""
             QPushButton {{
-                background: {C.PANEL2};
+                background: {C.PANEL};
                 color: {C.PRI};
                 border: 1px solid {C.BORDER};
                 border-radius: 6px;
@@ -211,7 +211,7 @@ class PerplexityComposer(QWidget):
                 font-weight: 500;
             }}
             QPushButton:hover {{
-                background: #1B1B1B;
+                background: {C.HOVER};
                 color: {C.WHITE};
                 border-color: {C.BORDER_B};
             }}
@@ -269,10 +269,10 @@ class PerplexityComposer(QWidget):
                 font-weight: bold;
             }}
             QPushButton:hover {{
-                background: #22D3EE;
+                background: #38BDF8;
             }}
             QPushButton:pressed {{
-                background: #06B6D4;
+                background: #0284C7;
             }}
         """)
         self._send_btn.clicked.connect(self._send_clicked)

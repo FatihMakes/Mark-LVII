@@ -46,7 +46,7 @@ class SuggestionPill(QPushButton):
                 text-align: left;
             }}
             QPushButton:hover {{
-                background: #1B1B1B;
+                background: {C.HOVER};
                 border-color: {C.BORDER_B};
                 color: {C.WHITE};
             }}
@@ -70,7 +70,7 @@ class MiniSourceCard(QFrame):
             }}
             QFrame:hover {{
                 border-color: {C.PRI};
-                background: #1B1B1B;
+                background: {C.HOVER};
             }}
         """)
         lay = QVBoxLayout(self)

@@ -84,7 +84,7 @@ class NavItemButton(QPushButton):
                     {pad}
                 }}
                 QPushButton:hover {{
-                    background: #1B1B1B;
+                    background: {C.HOVER};
                     border-color: {C.BORDER_B};
                     color: {C.WHITE};
                 }}
@@ -93,8 +93,8 @@ class NavItemButton(QPushButton):
             # Active navigation tab
             self.setStyleSheet(f"""
                 QPushButton {{
-                    background: {C.PANEL};
-                    color: {C.PRI};
+                    background: {C.ACTIVE};
+                    color: {C.TEXT};
                     border: 1px solid {C.BORDER};
                     border-left: 3px solid {C.PRI};
                     border-radius: 6px;
@@ -106,7 +106,7 @@ class NavItemButton(QPushButton):
                 }}
                 QPushButton:hover {{
                     color: {C.WHITE};
-                    background: #1B1B1B;
+                    background: {C.HOVER};
                 }}
             """)
         else:
@@ -124,7 +124,7 @@ class NavItemButton(QPushButton):
                     {pad}
                 }}
                 QPushButton:hover {{
-                    background: #1B1B1B;
+                    background: {C.HOVER};
                     color: {C.TEXT};
                     border: 1px solid {C.BORDER};
                 }}
@@ -150,7 +150,7 @@ class PerplexitySidebar(QWidget):
         self.setFixedWidth(self.EXPANDED_WIDTH)
         self.setStyleSheet(f"""
             QWidget#PerplexitySidebar {{
-                background: {C.BG};
+                background: {C.SIDEBAR};
                 border-right: 1px solid {C.BORDER};
             }}
         """)

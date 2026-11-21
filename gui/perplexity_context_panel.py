@@ -165,7 +165,7 @@ class SourceCard(QFrame):
             }}
             QFrame:hover {{
                 border-color: {C.PRI};
-                background: #1B1B1B;
+                background: {C.HOVER};
             }}
         """)
         lay = QVBoxLayout(self)
@@ -236,7 +236,7 @@ class PerplexityContextPanel(QWidget):
         self.setFixedWidth(270)
         self.setStyleSheet(f"""
             QWidget#PerplexityContextPanel {{
-                background: {C.BG};
+                background: {C.SIDEBAR};
                 border-left: 1px solid {C.BORDER};
             }}
         """)
@@ -268,7 +268,7 @@ class PerplexityContextPanel(QWidget):
                 }}
                 QPushButton:hover {{
                     color: {C.TEXT};
-                    background: {C.PANEL};
+                    background: {C.HOVER};
                 }}
             """)
             b.clicked.connect(lambda _, idx=i: self.set_current_tab(idx))
@@ -452,9 +452,9 @@ class PerplexityContextPanel(QWidget):
             if i == idx:
                 b.setStyleSheet(f"""
                     QPushButton {{
-                        background: {C.PANEL2};
-                        color: {C.PRI};
-                        border: 1px solid {C.BORDER_A};
+                        background: {C.ACTIVE};
+                        color: {C.TEXT};
+                        border: 1px solid {C.BORDER};
                         border-radius: 4px;
                         padding: 0 6px;
                     }}
@@ -470,7 +470,7 @@ class PerplexityContextPanel(QWidget):
                     }}
                     QPushButton:hover {{
                         color: {C.TEXT};
-                        background: {C.PANEL};
+                        background: {C.HOVER};
                     }}
                 """)
 

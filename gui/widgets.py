@@ -506,8 +506,8 @@ class _CameraPreview(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             _CameraPreview {{
-                background: rgba(0, 6, 10, 242);
-                border: 1px solid {C.PRI};
+                background: rgba(10, 10, 10, 250);
+                border: 1px solid {C.BORDER_B};
                 border-radius: 6px;
             }}
         """)
@@ -634,7 +634,7 @@ class HoloPanel(QWidget):
         p.setPen(QPen(QColor(C.BORDER), 1))
         p.drawPolygon(chamfer(QRectF(0.5, 0.5, W - 1, H - 1), cut))
         # subtle illuminated top accent border
-        p.setPen(QPen(with_alpha(C.PRI, 0.45), 1.2))
+        p.setPen(QPen(with_alpha(C.PRI, 0.25), 1.0))
         p.drawLine(QLineF(cut + 0.5, 0.5, min(W - cut, cut + 50), 0.5))
         if self._title:
             p.setPen(Qt.PenStyle.NoPen)
@@ -654,8 +654,8 @@ class HoloPanel(QWidget):
             p.drawText(QRectF(21, 6, room, 20), Qt.AlignmentFlag.AlignVCenter,
                        p.fontMetrics().elidedText(self._title, Qt.TextElideMode.ElideRight, int(room)))
             lg = QLinearGradient(12, 0, W - 12, 0)
-            lg.setColorAt(0.0, with_alpha(C.PRI, 0.35))
-            lg.setColorAt(0.5, with_alpha(C.PRI, 0.08))
+            lg.setColorAt(0.0, with_alpha(C.PRI, 0.20))
+            lg.setColorAt(0.5, with_alpha(C.PRI, 0.05))
             lg.setColorAt(1.0, with_alpha(C.PRI, 0.0))
             p.setPen(QPen(QBrush(lg), 1))
             p.drawLine(QLineF(12, self.HEADER, W - 12, self.HEADER))
@@ -978,7 +978,7 @@ class ArcLogo(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         cx = cy = 17
         g = QRadialGradient(cx, cy, 16)
-        g.setColorAt(0, with_alpha(C.PRI, 0.55))
+        g.setColorAt(0, with_alpha(C.PRI, 0.28))
         g.setColorAt(1, with_alpha(C.PRI, 0.0))
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(g))
@@ -1046,7 +1046,7 @@ class HeaderBar(QWidget):
         if not p.isActive():
             return
         W, H = self.width(), self.height()
-        p.fillRect(self.rect(), qcol(C.BG))
+        p.fillRect(self.rect(), qcol(C.TOPBAR))
         p.setPen(QPen(qcol(C.BORDER), 1))
         p.drawLine(QLineF(0, H - 1, W, H - 1))
         p.end()
@@ -1077,8 +1077,8 @@ class StatusStrip(QWidget):
             return
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         W, H = self.width(), self.height()
-        p.fillRect(self.rect(), blend(C.PRI, 0.03))
-        p.setPen(QPen(blend(C.PRI, 0.2), 1))
+        p.fillRect(self.rect(), qcol(C.SIDEBAR))
+        p.setPen(QPen(qcol(C.BORDER), 1))
         p.drawLine(QLineF(0, 0.5, W, 0.5))
         p.setFont(px_font(9.5, QFont.Weight.DemiBold, spacing=1.4))
         fm = p.fontMetrics()
@@ -1260,7 +1260,7 @@ class TaskRow(QWidget):
         W, H = self.width(), self.height()
         col = qcol(getattr(C, self._COLOURS.get(t["status"], "PRI")))
         if self.underMouse():
-            p.fillRect(self.rect(), blend(C.PRI, 0.08))
+            p.fillRect(self.rect(), qcol(C.HOVER))
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(col))
         p.drawEllipse(QPointF(5, 10), 3, 3)

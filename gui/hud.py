@@ -216,8 +216,8 @@ class HudCanvas(QWidget):
         cx = W / 2
 
         g = QRadialGradient(cx, H * 0.42, max(W, H) * 0.62)
-        g.setColorAt(0.0, blend(C.PRI, 0.08))
-        g.setColorAt(0.55, blend(C.PRI, 0.025))
+        g.setColorAt(0.0, QColor("#080808"))
+        g.setColorAt(0.60, qcol(C.BG))
         g.setColorAt(1.0, qcol(C.BG))
         p.fillRect(QRectF(0, 0, W, H), QBrush(g))
 
@@ -227,8 +227,8 @@ class HudCanvas(QWidget):
             x, yy = rnd.uniform(0, W), rnd.uniform(0, H * 0.85)
             rr = rnd.uniform(0.6, 2.4) * 2
             warm = rnd.random() < 0.10
-            c = C.ACC2 if warm else (C.WHITE if rnd.random() < 0.35 else C.PRI)
-            a = rnd.uniform(0.06, 0.30)
+            c = C.ACC2 if warm else (C.WHITE if rnd.random() < 0.45 else C.PRI)
+            a = rnd.uniform(0.04, 0.18)
             gg = QRadialGradient(x, yy, rr)
             gg.setColorAt(0.0, with_alpha(c, a))
             gg.setColorAt(1.0, with_alpha(c, 0.0))
@@ -607,15 +607,15 @@ class HudCanvas(QWidget):
 
         # Perplexity round control buttons [✕] (interrupt) and [🎤] (mic)
         btn_y = sy + 38
-        p.setBrush(QBrush(QColor("#161616")))
-        p.setPen(QPen(QColor("#2A2A2A"), 1))
+        p.setBrush(QBrush(qcol(C.ACTIVE)))
+        p.setPen(QPen(qcol(C.BORDER), 1))
         p.drawEllipse(QPointF(cx - 24, btn_y), 15, 15)
         p.drawEllipse(QPointF(cx + 24, btn_y), 15, 15)
 
         p.setFont(px_font(11, QFont.Weight.Bold))
-        p.setPen(QPen(QColor("#888888")))
+        p.setPen(QPen(qcol(C.TEXT_DIM)))
         p.drawText(QRectF(cx - 39, btn_y - 15, 30, 30), Qt.AlignmentFlag.AlignCenter, "✕")
-        mic_c = qcol(C.GREEN) if (self.state == "LISTENING" and not self.muted) else QColor("#888888")
+        mic_c = qcol(C.GREEN) if (self.state == "LISTENING" and not self.muted) else qcol(C.TEXT_DIM)
         p.setPen(QPen(mic_c))
         p.drawText(QRectF(cx + 9, btn_y - 15, 30, 30), Qt.AlignmentFlag.AlignCenter, "🎤")
 

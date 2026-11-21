@@ -196,7 +196,7 @@ class MainWindow(QMainWindow):
 
         # Live camera container — replaces HUD when camera stream is active
         _cam_cont = QWidget()
-        _cam_cont.setStyleSheet("background: #000308;")
+        _cam_cont.setStyleSheet(f"background: {C.PANEL}; border: 1px solid {C.BORDER}; border-radius: 8px;")
         _cam_v = QVBoxLayout(_cam_cont)
         _cam_v.setContentsMargins(0, 0, 0, 0)
         _cam_v.setSpacing(0)
@@ -1493,7 +1493,7 @@ class MainWindow(QMainWindow):
                 padding: 0 9px;
             }}
             QPushButton:hover {{
-                background: #1B1B1B;
+                background: {C.HOVER};
                 border-color: {C.BORDER_B};
                 color: {C.WHITE};
             }}
@@ -1543,7 +1543,7 @@ class MainWindow(QMainWindow):
             if i == active_idx:
                 btn.setStyleSheet(f"""
                     QPushButton {{
-                        background: #1C1C1C;
+                        background: {C.ACTIVE};
                         color: {C.WHITE};
                         border: 1px solid {C.BORDER_B};
                         border-radius: 6px;
@@ -1561,7 +1561,7 @@ class MainWindow(QMainWindow):
                         padding: 0 11px;
                     }}
                     QPushButton:hover {{
-                        background: #141414;
+                        background: {C.HOVER};
                         color: {C.TEXT};
                     }}
                 """)
