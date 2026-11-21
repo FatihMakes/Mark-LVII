@@ -24,7 +24,7 @@ def _note_gemini_error(exc: Exception) -> None:
     """Trip the breaker when the error is a quota / rate-limit rejection."""
     global _quota_blocked_until
     msg = str(exc)
-    if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+    if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "every Gemini model on the ladder failed" in msg:
         with _quota_lock:
             already = time.monotonic() < _quota_blocked_until
             _quota_blocked_until = time.monotonic() + _QUOTA_COOLDOWN_SEC
@@ -163,6 +163,25 @@ def _ddg_search(query: str, max_results: int = 6) -> list[dict]:
                         break
         except Exception as e:
             print(f"[WebSearch] ⚠️ HTML scrape fallback failed: {e}")
+
+    # Fallback to Wikipedia encyclopedia search if search engines throttled
+    if not results:
+        try:
+            import urllib.request
+            import urllib.parse
+            import re
+            url = f"https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(query)}&utf8=&format=json"
+            req = urllib.request.Request(url, headers={"User-Agent": "JARVIS-Assistant/1.0"})
+            with urllib.request.urlopen(req, timeout=5) as r:
+                data = json.loads(r.read())
+                for item in data.get("query", {}).get("search", [])[:max_results]:
+                    title = item.get("title", "")
+                    raw_snippet = item.get("snippet", "")
+                    clean_snippet = re.sub(r"<[^>]+>", "", raw_snippet)
+                    page_url = f"https://en.wikipedia.org/wiki/{urllib.parse.quote(title.replace(' ', '_'))}"
+                    results.append({"title": title, "snippet": clean_snippet, "url": page_url})
+        except Exception as e:
+            print(f"[WebSearch] ⚠️ Wikipedia fallback failed: {e}")
 
     return results
 

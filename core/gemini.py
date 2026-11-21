@@ -784,7 +784,7 @@ def _provider_call(model: str, contents, config, timeout_ms: int):
 
 def call(contents, tier: str = FAST, config=None,
          timeout_ms: int = DEFAULT_TIMEOUT_MS, key: str = "",
-         provider: str = ""):
+         provider: str = "", _tried_keys: Optional[set[str]] = None):
     """Run one generation, walking the ladder until one answers.
 
     Returns the SDK's own response object, so callers that need more than the
@@ -820,6 +820,10 @@ def call(contents, tier: str = FAST, config=None,
         ladder = (chosen,) + tuple(m for m in ladder if m != chosen)
 
     resolved_key = key or api_key()
+    if _tried_keys is None:
+        _tried_keys = set()
+    if resolved_key:
+        _tried_keys.add(resolved_key)
     if not resolved_key:
         # A provider does not need a Gemini key. Before this, a missing key
         # meant every one-shot call in the app failed — which is exactly the
@@ -884,9 +888,12 @@ def call(contents, tier: str = FAST, config=None,
 
     # If all models on this key were exhausted or key was refused, seamlessly rotate to next key in pool
     if has_alternative_keys():
-        new_key = rotate_api_key(failed_key=resolved_key, reason="key_refused" if key_refused else "all_models_exhausted")
-        if new_key and new_key != resolved_key:
-            return call(contents, tier=tier, config=config, timeout_ms=timeout_ms, key=new_key, provider=provider)
+        with _key_lock:
+            pool_len = len(_key_pool)
+        if len(_tried_keys) < pool_len:
+            new_key = rotate_api_key(failed_key=resolved_key, reason="key_refused" if key_refused else "all_models_exhausted")
+            if new_key and new_key not in _tried_keys:
+                return call(contents, tier=tier, config=config, timeout_ms=timeout_ms, key=new_key, provider=provider, _tried_keys=_tried_keys)
 
     return None
 
