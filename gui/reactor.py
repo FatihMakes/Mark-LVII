@@ -192,7 +192,8 @@ class Reactor3D:
 
             px = float(X_s[i])
             py = float(Y_s[i])
-            p.fillRect(QRectF(px - sz * 0.5, py - sz * 0.5, sz, sz), pt_col)
+            p.setBrush(QBrush(pt_col))
+            p.drawEllipse(QPointF(px, py), sz * 0.5, sz * 0.5)
 
         # ── 6. Outer Floating Celestial Motes ─────────────────────────────────
         m_rot = _ry(-spin * 0.40) @ self._mote_pts
@@ -205,9 +206,7 @@ class Reactor3D:
             d_k = max(0.0, min(1.0, (float(m_Z[i]) + 1.0) * 0.5))
             m_sz = 1.0 + 1.1 * d_k
             m_alpha = 0.18 + 0.45 * d_k
-            p.fillRect(
-                QRectF(float(m_X[i]) - m_sz * 0.5, float(m_Y[i]) - m_sz * 0.5, m_sz, m_sz),
-                _with_alpha(white, m_alpha),
-            )
+            p.setBrush(QBrush(_with_alpha(white, m_alpha)))
+            p.drawEllipse(QPointF(float(m_X[i]), float(m_Y[i])), m_sz * 0.5, m_sz * 0.5)
 
         p.restore()

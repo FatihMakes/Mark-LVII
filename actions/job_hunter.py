@@ -295,21 +295,37 @@ Your ATS resume `{Path(CANDIDATE_PROFILE['resume_path']).name}` is formatted and
             f"You can review the openings on your screen and apply directly with your ATS resume."
         )
 
-    elif action in ("draft_email", "apply"):
+    elif action in ("draft_email", "apply", "send_email", "mail_company", "apply_and_mail"):
         mail_data = _generate_tailored_email(company, role, recruiter_email)
         out_mail_file = APPLICATIONS_DIR / f"Application_{company.replace(' ', '_')}.txt"
         out_mail_file.write_text(f"To: {recruiter_email}\nSubject: {mail_data['subject']}\n\n{mail_data['body']}", encoding="utf-8")
+
+        # Open Gmail / Web composer with pre-filled cover letter if mail action requested
+        opened_mail = False
+        if action in ("send_email", "mail_company", "apply_and_mail"):
+            try:
+                import urllib.parse
+                import webbrowser
+                encoded_sub = urllib.parse.quote(mail_data['subject'])
+                encoded_body = urllib.parse.quote(mail_data['body'])
+                gmail_url = f"https://mail.google.com/mail/?view=cm&fs=1&to={urllib.parse.quote(recruiter_email)}&su={encoded_sub}&body={encoded_body}"
+                webbrowser.open(gmail_url)
+                opened_mail = True
+            except Exception:
+                pass
 
         tracker["applications"].append({
             "company": company,
             "role": role,
             "email": recruiter_email,
             "date": time.strftime("%Y-%m-%d"),
-            "status": "Ready to Send"
+            "status": "Email Composed & Opened" if opened_mail else "Ready to Send"
         })
         _save_tracker(tracker)
 
         card = f"## ✉️ Application Email Prepared\n**To:** `{recruiter_email}`\n**Subject:** `{mail_data['subject']}`\n\n```\n{mail_data['body']}\n```\n\n*Saved to: `{out_mail_file}`*"
+        if opened_mail:
+            card += "\n\n**Status:** ✅ Gmail composer launched with pre-filled application."
 
         if player and hasattr(player, "show_content"):
             player.show_content(f"Application Draft: {company}", card)
@@ -317,6 +333,10 @@ Your ATS resume `{Path(CANDIDATE_PROFILE['resume_path']).name}` is formatted and
         if player and hasattr(player, "write_log"):
             player.write_log(f"CAREER: Generated tailored cold outreach for {company}")
 
+        if opened_mail:
+            return (
+                f"I have composed your tailored application for {company} and opened Gmail with the pre-filled cover letter addressed to {recruiter_email}, sir."
+            )
         return (
             f"I have prepared a tailored application for {company}, sir. "
             f"It is saved in your Desktop folder at {out_mail_file.name}."
@@ -359,7 +379,7 @@ TOOL = {
         "properties": {
             "action": {
                 "type": "STRING",
-                "description": "apply_batch | linkedin_apply | search_jobs | draft_email | pipeline (default: apply_batch)",
+                "description": "apply_batch | linkedin_apply | search_jobs | draft_email | send_email | pipeline (default: apply_batch)",
             },
             "role": {
                 "type": "STRING",
