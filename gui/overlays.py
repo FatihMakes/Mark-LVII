@@ -40,7 +40,7 @@ from gui.theme import (
     qcol,
 )
 
-from gui.style import hud_font
+from gui.style import hud_font, px_font
 
 
 class SetupOverlay(QWidget):
@@ -1652,7 +1652,7 @@ class RemoteKeyOverlay(QWidget):
 
     closed = pyqtSignal()
 
-    _OW, _OH = 400, 465
+    _OW, _OH = 420, 520
 
     def __init__(self, url: str, key: str, auto_login_url: str = "",
                  manual_url: str = "", expiry_secs: int = 600, parent=None,
@@ -1661,8 +1661,8 @@ class RemoteKeyOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             RemoteKeyOverlay {{
-                background: rgba(0, 4, 12, 0.95);
-                border: 1px solid {C.BORDER_B};
+                background: #0E0E0E;
+                border: 1px solid #282828;
                 border-radius: 14px;
             }}
         """)
@@ -1672,30 +1672,51 @@ class RemoteKeyOverlay(QWidget):
         self._manual_url      = manual_url or url
 
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(24, 16, 24, 16)
-        lay.setSpacing(5)
+        lay.setContentsMargins(22, 16, 22, 16)
+        lay.setSpacing(6)
 
-        def _lbl(txt, fs=9, bold=False, color=C.PRI,
-                 align=Qt.AlignmentFlag.AlignCenter):
-            w = QLabel(txt)
-            w.setAlignment(align)
-            w.setFont(hud_font(fs,
-                            QFont.Weight.Bold if bold else QFont.Weight.Normal))
-            w.setStyleSheet(f"color: {color}; background: transparent;")
-            w.setWordWrap(True)
-            return w
+        # ── Header: Title + Close Button ──────────────────────────────────────
+        hdr = QHBoxLayout()
+        hdr.setContentsMargins(0, 0, 0, 0)
+        hdr.setSpacing(6)
 
-        lay.addWidget(_lbl("◈  REMOTE ACCESS", 12, True))
-        sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet(f"color: {C.BORDER}; margin: 1px 0;")
+        title_lbl = QLabel("◈  REMOTE CONTROL DASHBOARD")
+        title_lbl.setFont(px_font(12, QFont.Weight.Bold))
+        title_lbl.setStyleSheet(f"color: {C.WHITE}; background: transparent; letter-spacing: 0.8px;")
+        hdr.addWidget(title_lbl, stretch=1)
+
+        x_btn = QPushButton("✕")
+        x_btn.setFixedSize(22, 22)
+        x_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        x_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {C.TEXT_MED};
+                border: 1px solid transparent;
+                border-radius: 4px;
+                font-size: 11px;
+            }}
+            QPushButton:hover {{
+                color: {C.WHITE};
+                background: #1C1C1C;
+                border: 1px solid {C.BORDER};
+            }}
+        """)
+        x_btn.clicked.connect(self._do_close)
+        hdr.addWidget(x_btn)
+        lay.addLayout(hdr)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet("background: #222222; max-height: 1px; margin: 2px 0;")
         lay.addWidget(sep)
 
         # ── QR code ───────────────────────────────────────────────────────────
         self._qr_label = QLabel()
         self._qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._qr_label.setFixedSize(176, 176)
+        self._qr_label.setFixedSize(164, 164)
         self._qr_label.setStyleSheet(
-            "background: white; border-radius: 10px; padding: 4px;"
+            "background: white; border: 1px solid #333333; border-radius: 10px; padding: 4px;"
         )
         qr_row = QHBoxLayout()
         qr_row.addStretch()
@@ -1705,26 +1726,18 @@ class RemoteKeyOverlay(QWidget):
 
         self._update_qr(auto_login_url)
 
-        lay.addWidget(_lbl("Scan with phone camera to connect instantly", 8, color=C.TEXT_DIM))
+        sub_lbl = QLabel("Scan with phone camera to connect instantly")
+        sub_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        sub_lbl.setFont(px_font(9.5))
+        sub_lbl.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
+        lay.addWidget(sub_lbl)
 
-        # THE ONE FAILURE THAT LOOKS LIKE THE SERVER BEING OFF.
-        #
-        # Windows writes a BLOCK rule for an executable when its "Allow access?"
-        # prompt is dismissed, and a block overrides every allow rule there is —
-        # including the port rule this app carefully creates. The phone then
-        # reports "refused to connect" while the server is running perfectly.
-        #
-        # It is invisible from the HUD, which is where the person scanning the
-        # QR code is looking, and it is per-EXECUTABLE: the shortcut runs
-        # pythonw.exe while an editor runs python.exe, so it can block one launch
-        # method and not the other on the same machine. That difference is
-        # unguessable without being told, so it is said here.
-        # Whatever is stopping this from working, say it HERE — beside the QR
-        # code, where the person about to scan it is looking. A dashboard that
-        # cannot be reached and does not explain why is the single most
-        # frustrating failure this app has.
         if bind_error:
-            lay.addWidget(_lbl("⚠  " + bind_error, 8, color="#f4b942"))
+            err_lbl = QLabel("⚠  " + bind_error)
+            err_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            err_lbl.setFont(px_font(8.5))
+            err_lbl.setStyleSheet("color: #F59E0B; background: transparent;")
+            lay.addWidget(err_lbl)
 
         try:
             from dashboard.server import blocking_firewall_rules
@@ -1732,74 +1745,92 @@ class RemoteKeyOverlay(QWidget):
         except Exception:
             _blocked = []
         if _blocked:
-            warn = _lbl(
-                "⚠  Windows is blocking incoming connections to this copy of "
-                "Python, so your phone cannot reach this page. Restart JARVIS "
-                "and accept the Windows prompt, or remove the rules named "
-                + ", ".join(sorted({n for n, _ in _blocked}))
-                + " under Windows Defender Firewall → Inbound Rules.",
-                8, color="#f4b942")
+            warn = QLabel(
+                "⚠  Windows is blocking incoming connections to Python. "
+                "Restart JARVIS and accept prompt, or allow rules under Windows Defender.",
+            )
+            warn.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            warn.setFont(px_font(8))
+            warn.setWordWrap(True)
+            warn.setStyleSheet("color: #F59E0B; background: transparent;")
             lay.addWidget(warn)
 
-        sep2 = QFrame(); sep2.setFrameShape(QFrame.Shape.HLine)
-        sep2.setStyleSheet(f"color: {C.BORDER}; margin: 1px 0;")
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.Shape.HLine)
+        sep2.setStyleSheet("background: #222222; max-height: 1px; margin: 2px 0;")
         lay.addWidget(sep2)
 
-        lay.addWidget(_lbl("Or enter manually:", 7, color=C.TEXT_DIM,
-                           align=Qt.AlignmentFlag.AlignLeft))
+        manual_title = QLabel("OR CONNECT MANUALLY ON PHONE BROWSER:")
+        manual_title.setFont(px_font(8.5, QFont.Weight.Bold))
+        manual_title.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent; letter-spacing: 0.5px;")
+        lay.addWidget(manual_title)
 
         self._url_lbl = QLabel(self._manual_url)
-        self._url_lbl.setFont(hud_font(8))
-        self._url_lbl.setStyleSheet(f"color: {C.PRI_DIM}; background: transparent;")
+        self._url_lbl.setFont(px_font(9, mono=True))
+        self._url_lbl.setStyleSheet(f"color: {C.PRI}; background: #141414; border: 1px solid #222222; border-radius: 4px; padding: 3px 6px;")
         self._url_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._url_lbl.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse)
+        self._url_lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         lay.addWidget(self._url_lbl)
 
         self._key_lbl = QLabel(key)
-        self._key_lbl.setFont(hud_font(28, QFont.Weight.Bold))
+        self._key_lbl.setFont(px_font(24, QFont.Weight.Bold, mono=True))
         self._key_lbl.setStyleSheet(f"""
-            color: {C.ACC};
-            background: {C.PANEL2};
-            border: 1px solid {C.BORDER_B};
+            color: {C.WHITE};
+            background: #141414;
+            border: 1px solid #333333;
             border-radius: 8px;
-            padding: 6px 4px;
-            letter-spacing: 10px;
+            padding: 4px 4px;
+            letter-spacing: 8px;
         """)
         self._key_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(self._key_lbl)
 
         self._timer_lbl = QLabel()
-        self._timer_lbl.setFont(hud_font(8))
-        self._timer_lbl.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
+        self._timer_lbl.setFont(px_font(9))
+        self._timer_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
         self._timer_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(self._timer_lbl)
 
-        btn_row = QHBoxLayout(); btn_row.setSpacing(8)
-        new_btn = QPushButton("NEW KEY")
-        new_btn.setFixedHeight(32)
-        new_btn.setFont(hud_font(8, QFont.Weight.Bold))
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+        new_btn = QPushButton("GENERATE NEW KEY")
+        new_btn.setFixedHeight(30)
+        new_btn.setFont(px_font(9.5, QFont.Weight.DemiBold))
         new_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         new_btn.setStyleSheet(f"""
             QPushButton {{
-                background: {C.PANEL}; color: {C.PRI};
-                border: 1px solid {C.PRI_DIM}; border-radius: 5px;
+                background: #1C1C1C;
+                color: {C.WHITE};
+                border: 1px solid #383838;
+                border-radius: 6px;
+                padding: 0 12px;
             }}
-            QPushButton:hover {{ background: {C.PRI_GHO}; border: 1px solid {C.PRI}; }}
+            QPushButton:hover {{
+                background: #252525;
+                border-color: {C.PRI};
+                color: {C.PRI};
+            }}
         """)
         new_btn.clicked.connect(self._refresh_key)
         btn_row.addWidget(new_btn)
 
         close_btn = QPushButton("DISMISS")
-        close_btn.setFixedHeight(32)
-        close_btn.setFont(hud_font(8, QFont.Weight.Bold))
+        close_btn.setFixedHeight(30)
+        close_btn.setFont(px_font(9.5, QFont.Weight.DemiBold))
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_btn.setStyleSheet(f"""
             QPushButton {{
-                background: transparent; color: {C.TEXT_MED};
-                border: 1px solid {C.BORDER}; border-radius: 5px;
+                background: transparent;
+                color: {C.TEXT_MED};
+                border: 1px solid #282828;
+                border-radius: 6px;
+                padding: 0 12px;
             }}
-            QPushButton:hover {{ color: {C.TEXT}; border: 1px solid {C.BORDER_B}; }}
+            QPushButton:hover {{
+                color: {C.TEXT};
+                background: #141414;
+                border-color: #383838;
+            }}
         """)
         close_btn.clicked.connect(self._do_close)
         btn_row.addWidget(close_btn)
@@ -1862,16 +1893,16 @@ class RemoteKeyOverlay(QWidget):
         self._key_lbl.setText("CONNECTED")
         self._key_lbl.setStyleSheet(f"""
             color: {C.GREEN};
-            background: rgba(34,197,94,0.08);
-            border: 2px solid rgba(34,197,94,0.4);
+            background: rgba(16, 185, 129, 0.10);
+            border: 1px solid rgba(16, 185, 129, 0.40);
             border-radius: 8px;
             padding: 6px 4px;
             letter-spacing: 4px;
         """)
         self._qr_label.setText("✓")
-        self._qr_label.setFont(hud_font(54, QFont.Weight.Bold))
+        self._qr_label.setFont(px_font(48, QFont.Weight.Bold))
         self._qr_label.setStyleSheet(
-            "color: #00ff88; background: #001a0d; border-radius: 10px;"
+            f"color: {C.GREEN}; background: #141414; border: 1px solid rgba(16, 185, 129, 0.40); border-radius: 10px;"
         )
         self._timer_lbl.setText("Phone connected — JARVIS ready")
         self._timer_lbl.setStyleSheet(f"color: {C.GREEN}; background: transparent;")
@@ -1891,15 +1922,15 @@ class RemoteKeyOverlay(QWidget):
                 self._update_qr(auto or url)
                 self._expiry = time.time() + 600
                 self._key_lbl.setStyleSheet(f"""
-                    color: {C.ACC};
-                    background: {C.PANEL2};
-                    border: 1px solid {C.BORDER_B};
+                    color: {C.WHITE};
+                    background: #141414;
+                    border: 1px solid #333333;
                     border-radius: 8px;
-                    padding: 6px 4px;
-                    letter-spacing: 10px;
+                    padding: 4px 4px;
+                    letter-spacing: 8px;
                 """)
                 self._timer_lbl.setStyleSheet(
-                    f"color: {C.TEXT_MED}; background: transparent;"
+                    f"color: {C.TEXT_DIM}; background: transparent;"
                 )
                 self._ctimer.start(1000)
                 self._tick()
