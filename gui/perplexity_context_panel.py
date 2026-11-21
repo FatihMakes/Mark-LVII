@@ -158,7 +158,7 @@ class SourceCard(QFrame):
             }}
             QFrame:hover {{
                 border-color: {C.PRI};
-                background: #111d33;
+                background: #1B1B1B;
             }}
         """)
         lay = QVBoxLayout(self)

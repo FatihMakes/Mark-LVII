@@ -72,9 +72,9 @@ class NavItemButton(QPushButton):
             # Prominent action button (like New Thread)
             self.setStyleSheet(f"""
                 QPushButton {{
-                    background: {C.PRI_GHO};
+                    background: {C.PANEL};
                     color: {C.PRI};
-                    border: 1px solid {C.PRI_DIM};
+                    border: 1px solid {C.BORDER};
                     border-radius: 8px;
                     font-family: {DISPLAY_CSS};
                     font-size: 13px;
@@ -83,8 +83,8 @@ class NavItemButton(QPushButton):
                     {pad}
                 }}
                 QPushButton:hover {{
-                    background: {C.PANEL2};
-                    border-color: {C.PRI};
+                    background: #1B1B1B;
+                    border-color: {C.BORDER_B};
                     color: {C.WHITE};
                 }}
             """)
@@ -92,9 +92,9 @@ class NavItemButton(QPushButton):
             # Active navigation tab
             self.setStyleSheet(f"""
                 QPushButton {{
-                    background: {C.PANEL2};
+                    background: {C.PANEL};
                     color: {C.PRI};
-                    border: 1px solid {C.BORDER_B};
+                    border: 1px solid {C.BORDER};
                     border-left: 3px solid {C.PRI};
                     border-radius: 6px;
                     font-family: {DISPLAY_CSS};
@@ -105,7 +105,7 @@ class NavItemButton(QPushButton):
                 }}
                 QPushButton:hover {{
                     color: {C.WHITE};
-                    background: #17233d;
+                    background: #1B1B1B;
                 }}
             """)
         else:
@@ -123,7 +123,7 @@ class NavItemButton(QPushButton):
                     {pad}
                 }}
                 QPushButton:hover {{
-                    background: {C.PANEL};
+                    background: #1B1B1B;
                     color: {C.TEXT};
                     border: 1px solid {C.BORDER};
                 }}

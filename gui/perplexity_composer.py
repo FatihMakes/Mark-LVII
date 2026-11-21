@@ -175,7 +175,7 @@ class PerplexityComposer(QWidget):
         self._attach_btn.setToolTip("Attach a document, PDF, or code file")
         self._attach_btn.setStyleSheet(f"""
             QPushButton {{
-                background: transparent;
+                background: {C.PANEL2};
                 color: {C.TEXT_MED};
                 border: 1px solid {C.BORDER};
                 border-radius: 6px;
@@ -184,9 +184,9 @@ class PerplexityComposer(QWidget):
                 font-weight: 500;
             }}
             QPushButton:hover {{
-                background: {C.PANEL2};
-                color: {C.PRI};
-                border-color: {C.PRI_DIM};
+                background: #1B1B1B;
+                color: {C.TEXT};
+                border-color: {C.BORDER_B};
             }}
         """)
         self._attach_btn.clicked.connect(self._browse_file)
@@ -201,15 +201,16 @@ class PerplexityComposer(QWidget):
             QPushButton {{
                 background: {C.PANEL2};
                 color: {C.PRI};
-                border: 1px solid {C.BORDER_A};
+                border: 1px solid {C.BORDER};
                 border-radius: 6px;
                 padding: 0 10px;
                 font-size: 11px;
                 font-weight: 500;
             }}
             QPushButton:hover {{
+                background: #1B1B1B;
                 color: {C.WHITE};
-                border-color: {C.PRI_DIM};
+                border-color: {C.BORDER_B};
             }}
         """)
         self._mode_btn.clicked.connect(self._cycle_mode)
@@ -224,17 +225,17 @@ class PerplexityComposer(QWidget):
         self._interrupt_btn.setToolTip("Stop speech  [ESC]")
         self._interrupt_btn.setStyleSheet(f"""
             QPushButton {{
-                background: #3b111a;
+                background: #200D0D;
                 color: {C.RED};
-                border: 1px solid #7f1d1d;
+                border: 1px solid #7F1D1D;
                 border-radius: 6px;
                 padding: 0 10px;
                 font-size: 11px;
                 font-weight: 600;
             }}
             QPushButton:hover {{
-                background: #501322;
-                color: #ffffff;
+                background: #2D1212;
+                color: #FFFFFF;
             }}
         """)
         self._interrupt_btn.clicked.connect(self.interrupt_called.emit)
@@ -265,10 +266,10 @@ class PerplexityComposer(QWidget):
                 font-weight: bold;
             }}
             QPushButton:hover {{
-                background: #38bdf8;
+                background: #22D3EE;
             }}
             QPushButton:pressed {{
-                background: #0284c7;
+                background: #06B6D4;
             }}
         """)
         self._send_btn.clicked.connect(self._send_clicked)
@@ -337,24 +338,30 @@ class PerplexityComposer(QWidget):
             self._mic_btn.setText("🔇 Muted")
             self._mic_btn.setStyleSheet(f"""
                 QPushButton {{
-                    background: #3b111a;
+                    background: #200D0D;
                     color: {C.RED};
-                    border: 1px solid #7f1d1d;
+                    border: 1px solid #7F1D1D;
                     border-radius: 6px;
                     padding: 0 10px;
                     font-size: 11px;
+                }}
+                QPushButton:hover {{
+                    background: #2D1212;
                 }}
             """)
         else:
             self._mic_btn.setText("🎙 Mic Active")
             self._mic_btn.setStyleSheet(f"""
                 QPushButton {{
-                    background: #062b1e;
+                    background: #0D1E16;
                     color: {C.GREEN};
                     border: 1px solid #059669;
                     border-radius: 6px;
                     padding: 0 10px;
                     font-size: 11px;
+                }}
+                QPushButton:hover {{
+                    background: #132A1F;
                 }}
             """)
 

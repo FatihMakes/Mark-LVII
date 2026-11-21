@@ -97,27 +97,28 @@ _OS = platform.system()  # "Windows" | "Darwin" | "Linux"
 
 
 class C:
-    BG        = "#080b12"      # Deep cosmic obsidian glass (Apple / Perplexity dark mode)
-    PANEL     = "#0f172a"      # Sleek dark slate glass card
-    PANEL2    = "#131d33"      # Secondary card / drawer glass
-    BORDER    = "#1e293b"      # Subtle, elegant dark slate border
-    BORDER_B  = "#334155"      # Interactive hover / active border
-    BORDER_A  = "#25344d"      # Subtle focus border
-    PRI       = "#00e5ff"      # Apple Siri iconic luminous electric cyan
-    PRI_DIM   = "#0284c7"      # Deep sky blue
-    PRI_GHO   = "#0c2338"      # Translucent glow tint for pills and badges
-    ACC       = "#f59e0b"      # Apple warm amber (status badges / highlights)
-    ACC2      = "#fbbf24"      # Bright golden highlight
-    GREEN     = "#10b981"      # Apple vibrant emerald (listening / online state)
+    # ── Premium Perplexity-Inspired Black Design System ────────────────────────
+    BG        = "#080808"      # Main background: #080808
+    PANEL     = "#141414"      # Elevated surfaces: #141414
+    PANEL2    = "#0D0D0D"      # Secondary background: #0D0D0D
+    BORDER    = "#252525"      # Borders: #252525
+    BORDER_B  = "#383838"      # Interactive hover / active border
+    BORDER_A  = "#2A2A2A"      # Subtle focus border
+    PRI       = "#00D4FF"      # Subtle cyan/turquoise accent
+    PRI_DIM   = "#0284C7"      # Deep sky blue
+    PRI_GHO   = "#141E28"      # Translucent subtle tint
+    ACC       = "#F59E0B"      # Speaking state: warm amber #F59E0B
+    ACC2      = "#D97706"      # Bright golden highlight
+    GREEN     = "#10B981"      # Active state: restrained green #10B981
     GREEN_D   = "#059669"      # Emerald dim
-    RED       = "#f43f5e"      # Apple rose / coral (danger, interrupt)
-    MUTED_C   = "#fb7185"      # Rose muted
-    TEXT      = "#e2e8f0"      # Clean, comfortable, high-readability slate white
-    TEXT_DIM  = "#64748b"      # Subdued metadata / timestamps
-    TEXT_MED  = "#94a3b8"      # Medium slate secondary labels
-    WHITE     = "#ffffff"      # Pure high-contrast white for headers and titles
-    DARK      = "#0a0e1a"      # Deepest obsidian
-    BAR_BG    = "#1a2333"      # Progress bar trough
+    RED       = "#EF4444"      # Muted state: soft red #EF4444
+    MUTED_C   = "#EF4444"      # Muted state: soft red #EF4444
+    TEXT      = "#F5F5F5"      # Primary text: #F5F5F5
+    TEXT_DIM  = "#71717A"      # Muted text: #71717A
+    TEXT_MED  = "#A1A1AA"      # Secondary text: #A1A1AA
+    WHITE     = "#FFFFFF"      # High contrast white
+    DARK      = "#080808"      # Deepest black
+    BAR_BG    = "#181818"      # Progress bar trough
 
 
 # Keys tied to the accent colour — dark glass surfaces and typography stay crisp & neutral

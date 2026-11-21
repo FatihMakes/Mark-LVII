@@ -1025,18 +1025,18 @@ class StateChip(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         W, H = self.width(), self.height()
         col = qcol(getattr(C, self._COLOURS.get(self._state, "PRI")))
-        p.setBrush(QBrush(blend(col, 0.10)))
-        p.setPen(QPen(blend(col, 0.55), 1))
-        p.drawPolygon(chamfer(QRectF(0.5, 0.5, W - 1, H - 1), 9, ("tl", "tr", "br", "bl")))
-        g = QRadialGradient(22, H / 2, 10)
+        p.setBrush(QBrush(blend(col, 0.08)))
+        p.setPen(QPen(qcol(C.BORDER), 1))
+        p.drawRoundedRect(QRectF(0.5, 0.5, W - 1, H - 1), 6, 6)
+        g = QRadialGradient(22, H / 2, 8)
         g.setColorAt(0, with_alpha(col, 0.9))
         g.setColorAt(1, with_alpha(col, 0.0))
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(g))
-        p.drawEllipse(QPointF(22, H / 2), 10, 10)
+        p.drawEllipse(QPointF(22, H / 2), 8, 8)
         p.setBrush(QBrush(col))
         p.drawEllipse(QPointF(22, H / 2), 3.5, 3.5)
-        p.setFont(px_font(12, QFont.Weight.DemiBold, spacing=2.6))
+        p.setFont(px_font(11, QFont.Weight.DemiBold, spacing=2.0))
         p.setPen(QPen(col))
         p.drawText(QRectF(38, 0, W - 44, H), Qt.AlignmentFlag.AlignVCenter,
                    p.fontMetrics().elidedText(self._state, Qt.TextElideMode.ElideRight, int(W - 44)))
@@ -1044,26 +1044,16 @@ class StateChip(QWidget):
 
 
 class HeaderBar(QWidget):
-    """The header's ground: a faint wash, and a bright rule along the bottom
-    that is brightest in the middle, under the state chip."""
+    """The header's ground: clean dark surface with a subtle minimal border."""
 
     def paintEvent(self, _):
         p = QPainter(self)
         if not p.isActive():
             return
         W, H = self.width(), self.height()
-        g = QLinearGradient(0, 0, 0, H)
-        g.setColorAt(0, blend(C.PRI, 0.06))
-        g.setColorAt(1, qcol(C.BG))
-        p.fillRect(self.rect(), QBrush(g))
-        lg = QLinearGradient(0, 0, W, 0)
-        lg.setColorAt(0.0, with_alpha(C.PRI, 0.05))
-        lg.setColorAt(0.5, with_alpha(C.PRI, 0.9))
-        lg.setColorAt(1.0, with_alpha(C.PRI, 0.05))
-        p.setPen(QPen(QBrush(lg), 1))
-        p.drawLine(QLineF(0, H - 1.5, W, H - 1.5))
-        p.setPen(QPen(qcol(C.PRI), 2))
-        p.drawLine(QLineF(W / 2 - 70, H - 1.5, W / 2 + 70, H - 1.5))
+        p.fillRect(self.rect(), qcol(C.BG))
+        p.setPen(QPen(qcol(C.BORDER), 1))
+        p.drawLine(QLineF(0, H - 1, W, H - 1))
         p.end()
 
 

@@ -243,73 +243,74 @@ class Reactor3D:
             p.drawRect(QRectF(fx - beam_w, top + hgt * k / steps, beam_w * 2, hgt / steps + 0.5))
         p.restore()
 
-        # ── Gyroscope and Orbit Rings (Apple Siri & Perplexity Depth System) ──
-        siri_violet = QColor("#c084fc")
-        siri_cyan   = QColor("#00f0ff")
-        siri_indigo = QColor("#6366f1")
-        siri_pink   = QColor("#ec4899")
+        # ── Gyroscope and Orbit Rings (Cinematic AI Visualization) ────────────
+        core_cyan  = QColor(C.PRI)
+        core_amber = QColor(C.ACC)
+        core_green = QColor(C.GREEN)
+
+        # Rings harmonize with the actual operational state (main and acc)
+        ring_col1 = acc if live else main
+        ring_col2 = main
+        ring_col3 = _with_alpha(main, 0.65)
 
         rings = (
             (self._project(_ry(spin * 0.9) @ _rz(math.radians(64)) @ (self._ring * 0.90), cx, cy, r),
-             siri_violet if live else acc, 0.88, 1.8),
+             ring_col1, 0.85, 1.6),
             (self._project(_ry(-spin * 1.25) @ _rx(math.radians(58)) @ (self._ring * 0.78), cx, cy, r),
-             siri_cyan, 0.76, 1.5),
-            (self._project(self._ring * 1.08, cx, cy, r), siri_indigo, 0.58, 1.2),
+             ring_col2, 0.72, 1.4),
+            (self._project(self._ring * 1.08, cx, cy, r), ring_col3, 0.55, 1.2),
         )
 
         # Draw the back half of the 3D gyroscope rings behind the glowing orb
         for (X, Y, Z, _s), col, a, w in rings:
-            self._cued(p, X, Y, Z, col, a, a * 0.55, w, "back")
+            self._cued(p, X, Y, Z, col, a, a * 0.50, w, "back")
 
-        # ── Apple Siri & Perplexity Iridescent Luminous Nebula Aura ───────────
+        # ── Atmospheric Luminous Energy Nebula ────────────────────────────────
         sr = r * _SPHERE * (1.0 + 0.08 * amp)
-        aura_r = sr * (1.92 + 0.42 * amp + 0.06 * math.sin(spin * 2.8))
+        aura_r = sr * (1.85 + 0.35 * amp + 0.05 * math.sin(spin * 2.8))
         aura = QRadialGradient(QPointF(cx, cy), aura_r)
-        aura.setColorAt(0.00, _with_alpha(white, 0.88 + 0.12 * amp))
-        aura.setColorAt(0.20, _with_alpha(siri_violet if live else siri_cyan, 0.65 + 0.25 * amp))
-        aura.setColorAt(0.45, _with_alpha(siri_cyan, 0.40 + 0.20 * amp))
-        aura.setColorAt(0.72, _with_alpha(siri_indigo, 0.18))
-        aura.setColorAt(0.90, _with_alpha(siri_pink, 0.08 * (1.0 + amp)))
-        aura.setColorAt(1.00, _with_alpha(siri_indigo, 0.0))
+        aura.setColorAt(0.00, _with_alpha(white, 0.85 + 0.15 * amp))
+        aura.setColorAt(0.22, _with_alpha(main, 0.55 + 0.25 * amp))
+        aura.setColorAt(0.50, _with_alpha(acc, 0.28 + 0.18 * amp))
+        aura.setColorAt(0.78, _with_alpha(main, 0.12))
+        aura.setColorAt(1.00, _with_alpha(main, 0.0))
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(aura))
         p.drawEllipse(QPointF(cx, cy), aura_r, aura_r)
 
-        # ── Siri Fluid Iridescent Plasma Sphere (Dynamic Swirling Highlight) ──
-        rot_ang = spin * 1.6
-        hx = cx + sr * 0.32 * math.cos(rot_ang)
-        hy = cy + sr * 0.32 * math.sin(rot_ang)
+        # ── Central Fluid Energy Sphere (Smooth Dynamic Lighting) ─────────────
+        rot_ang = spin * 1.4
+        hx = cx + sr * 0.28 * math.cos(rot_ang)
+        hy = cy + sr * 0.28 * math.sin(rot_ang)
         shade = QRadialGradient(QPointF(cx, cy), sr, QPointF(hx, hy))
-        shade.setColorAt(0.00, _with_alpha(white, 0.98))
-        shade.setColorAt(0.18, _with_alpha(siri_cyan, 0.90 + 0.10 * amp))
-        shade.setColorAt(0.44, _with_alpha(siri_violet, 0.78 + 0.18 * amp))
-        shade.setColorAt(0.72, _with_alpha(siri_indigo, 0.45))
-        shade.setColorAt(0.92, _with_alpha(siri_pink, 0.28))
-        shade.setColorAt(1.00, _with_alpha(siri_cyan, 0.20))
+        shade.setColorAt(0.00, _with_alpha(white, 0.96))
+        shade.setColorAt(0.20, _with_alpha(main, 0.85 + 0.15 * amp))
+        shade.setColorAt(0.50, _with_alpha(acc, 0.65 + 0.20 * amp))
+        shade.setColorAt(0.80, _with_alpha(main, 0.35))
+        shade.setColorAt(1.00, _with_alpha(main, 0.15))
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(shade))
         p.drawEllipse(QPointF(cx, cy), sr, sr)
 
-        # Crisp luminous iridescent rim
+        # Elegant luminous rim
         p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setPen(QPen(_with_alpha(siri_cyan, 0.85 + 0.15 * amp), 1.6))
+        p.setPen(QPen(_with_alpha(main, 0.80 + 0.20 * amp), 1.5))
         p.drawEllipse(QPointF(cx, cy), sr, sr)
 
-        # ── Siri Luminous Core Star Heart ─────────────────────────────────────
-        hr = sr * (0.30 + 0.25 * amp) * (2.1 + 0.15 * math.sin(spin * 3.6))
+        # ── Luminous Core Star Heart ──────────────────────────────────────────
+        hr = sr * (0.28 + 0.22 * amp) * (2.0 + 0.12 * math.sin(spin * 3.4))
         heart = QRadialGradient(cx, cy, hr)
         heart.setColorAt(0.00, _with_alpha(white, 1.0))
-        heart.setColorAt(0.24, _with_alpha(siri_violet if live else siri_cyan, 0.92))
-        heart.setColorAt(0.55, _with_alpha(siri_indigo, 0.50))
-        heart.setColorAt(0.85, _with_alpha(siri_pink, 0.22))
-        heart.setColorAt(1.00, _with_alpha(siri_cyan, 0.0))
+        heart.setColorAt(0.26, _with_alpha(acc if live else main, 0.90))
+        heart.setColorAt(0.60, _with_alpha(main, 0.45))
+        heart.setColorAt(1.00, _with_alpha(main, 0.0))
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(heart))
         p.drawEllipse(QPointF(cx, cy), hr, hr)
 
         # Draw the front half of the 3D gyroscope rings passing in front of the orb
         for (X, Y, Z, _s), col, a, w in rings:
-            self._cued(p, X, Y, Z, col, a, a * 0.55, w, "front")
+            self._cued(p, X, Y, Z, col, a, a * 0.50, w, "front")
 
         # ── Celestial Tracers riding the Equatorial Orbit Ring ────────────────
         (X, Y, Z, _s), _c, _a, _w = rings[2]
@@ -317,26 +318,26 @@ class Reactor3D:
         for k in range(3):
             i = int((k * _N_RING / 3 + spin * 7.0) % _N_RING)
             depth = float(Z[i])
-            rad = (2.4 + 1.8 * max(0.0, depth)) * 3
+            rad = (2.2 + 1.6 * max(0.0, depth)) * 2.8
             x, y = float(X[i]), float(Y[i])
             tg = QRadialGradient(x, y, rad)
-            tg.setColorAt(0.0, _with_alpha(white, 0.95 if depth >= 0 else 0.40))
-            tg.setColorAt(0.35, _with_alpha(siri_violet if depth >= 0 else siri_cyan, 0.7 if depth >= 0 else 0.25))
-            tg.setColorAt(1.0, _with_alpha(siri_indigo, 0.0))
+            tg.setColorAt(0.0, _with_alpha(white, 0.92 if depth >= 0 else 0.35))
+            tg.setColorAt(0.35, _with_alpha(main if depth >= 0 else acc, 0.65 if depth >= 0 else 0.20))
+            tg.setColorAt(1.0, _with_alpha(main, 0.0))
             p.setBrush(QBrush(tg))
             p.drawEllipse(QPointF(x, y), rad, rad)
 
-        # ── Perplexity Cosmic Stardust Particle Field (Drifting Motes) ────────
+        # ── Cinematic Floating Motes / Star Dust ──────────────────────────────
         a = np.array([ph + spin * sp for _r0, ph, _y, sp in self._motes])
         r0 = np.array([m[0] for m in self._motes])
         pts = np.vstack([np.cos(a) * r0, np.array([m[2] for m in self._motes]), np.sin(a) * r0])
         MX, MY, MZ, _ = self._project(pts, cx, cy, r)
-        mote_cols = (siri_cyan, siri_violet, QColor("#fbbf24"), white)
+        mote_cols = (main, acc, white)
         for idx, (x, y, d) in enumerate(zip(MX.tolist(), MY.tolist(), MZ.tolist())):
             d = max(0.0, d)
             m_col = mote_cols[idx % len(mote_cols)]
-            m_rad = (1.2 + 1.2 * d) * (1.0 + 0.3 * amp)
-            p.setBrush(QBrush(_with_alpha(m_col, 0.35 + 0.50 * d)))
+            m_rad = (1.1 + 1.1 * d) * (1.0 + 0.25 * amp)
+            p.setBrush(QBrush(_with_alpha(m_col, 0.30 + 0.45 * d)))
             p.drawEllipse(QPointF(x, y), m_rad, m_rad)
 
         # the name, standing on the front edge of the platform
