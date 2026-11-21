@@ -653,6 +653,7 @@ class JarvisLive:
         self._visemes              = VisemeStream()
         self._last_out_logged      = ""      # de-dupes a re-sent transcript tail
         self._last_user_logged     = ""      # de-dupes user speech display
+        self._user_in_accumulator  = ""      # aggregates partial syllables / fragments
         # Push-to-talk
         self._ptt_enabled          = False
         self._ptt_held             = False
@@ -2072,10 +2073,18 @@ class JarvisLive:
                                 self._visemes.reset()
                                 continue
 
-                            full_in = _join_transcript_tokens(in_buf)
-                            if full_in and full_in != self._last_user_logged:
+                            raw_in = _join_transcript_tokens(in_buf)
+                            if raw_in:
+                                if len(raw_in.strip()) <= 2:
+                                    self._user_in_accumulator = (self._user_in_accumulator + " " + raw_in).strip()
+                                else:
+                                    self._user_in_accumulator = raw_in
+
+                            full_in = self._user_in_accumulator.strip()
+                            if full_in and len(full_in) > 2 and full_in != self._last_user_logged:
                                 self._last_user_logged = full_in
                                 self._last_out_logged = ""   # new exchange
+                                self._user_in_accumulator = ""
                                 self.ui.write_log(f"You: {full_in}")
                                 self._session_log.append(f"User: {full_in}")
                                 if self._dashboard:

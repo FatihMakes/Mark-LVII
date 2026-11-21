@@ -2063,15 +2063,28 @@ class MainWindow(QMainWindow):
         label, dash, rest = str(title or "").partition(" — ")
         self._content_title_lbl.setText((label.upper() + dash + rest)[:48])
         self._content_ts_lbl.setText(_time.strftime("%H:%M:%S"))
-        if text.strip().startswith(("<html", "<!DOCTYPE")):
-            self._content_display.setHtml(text)
-        elif any(sym in text for sym in ("# ", "## ", "### ", "**", "```", "- ", "* ", "1. ")):
+
+        # Clean up raw bare URLs into neat markdown links
+        import re
+        def _clean_bare_url(m):
+            u = m.group(0)
             try:
-                self._content_display.setMarkdown(text)
+                from urllib.parse import urlparse
+                dom = urlparse(u).netloc.replace('www.', '') or "link"
+                return f"[{dom}]({u})"
             except Exception:
-                self._content_display.setPlainText(text)
+                return f"[Link]({u})"
+        cleaned_text = re.sub(r'(?<!\(|\[)(https?://[^\s\)]+)', _clean_bare_url, text)
+
+        if cleaned_text.strip().startswith(("<html", "<!DOCTYPE")):
+            self._content_display.setHtml(cleaned_text)
+        elif any(sym in cleaned_text for sym in ("# ", "## ", "### ", "**", "```", "- ", "* ", "1. ", "[")):
+            try:
+                self._content_display.setMarkdown(cleaned_text)
+            except Exception:
+                self._content_display.setPlainText(cleaned_text)
         else:
-            self._content_display.setPlainText(text)
+            self._content_display.setPlainText(cleaned_text)
         self._content_display.moveCursor(
             self._content_display.textCursor().MoveOperation.Start
         )

@@ -564,14 +564,17 @@ MANDATORY GUIDELINES:
         except Exception:
             pass
 
-    # Save to desktop as permanent markdown
+    # Save to desktop as permanent markdown and pristine PDF
     save_msg = ""
     try:
         sol_dest = DESKTOP / f"{path.stem}_solution.md"
         sol_dest.write_text(f"# Detailed Analysis & Solution: {path.name}\n\n**Query:** {task_desc}\n\n---\n\n{solution}", encoding="utf-8")
-        save_msg = f" Full detailed solution saved to `{sol_dest.name}` on Desktop and displayed on your screen."
-    except Exception:
-        pass
+        # Also automatically compile a real, valid PDF if pdf is requested or for study solutions
+        pdf_dest = DESKTOP / f"{path.stem}_solution.pdf"
+        generate_pdf_from_text(solution, str(pdf_dest), title=f"Solutions: {path.stem}")
+        save_msg = f" Full detailed solution saved to `{sol_dest.name}` and `{pdf_dest.name}` on Desktop and displayed on your screen."
+    except Exception as e:
+        print(f"[DocumentStudio] Error saving solutions to desktop: {e}")
 
     return f"✅ Detailed analysis complete for `{path.name}`.{save_msg}\n\n{solution}"
 

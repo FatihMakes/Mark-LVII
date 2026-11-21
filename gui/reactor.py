@@ -32,6 +32,7 @@ import numpy as np
 from PyQt6.QtCore import QLineF, QPointF, QRectF, Qt
 from PyQt6.QtGui import (QBrush, QColor, QFont, QLinearGradient, QPainter, QPen, QPixmap,
                          QRadialGradient)
+from gui.theme import C
 
 _DISPLAY = ["Bahnschrift", "Segoe UI", "SF Pro Display", "Helvetica Neue",
             "Noto Sans", "DejaVu Sans"]
