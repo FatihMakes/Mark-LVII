@@ -166,21 +166,35 @@ PROVIDER_PREFIX = "prov:"
 # each before reaching one that answers. They stay on the ladder because keys
 # created before their retirement can still use them.
 _LADDERS = {
-    FAST: (LIVE,
-           "gemini-3.5-flash-lite", "gemini-flash-lite-latest",
-           "gemini-3.1-flash-lite", "gemini-3.5-flash",
-           "gemini-3.6-flash", "gemini-3.8-flash", "gemini-flash-latest",
-           "gemini-3-flash-preview", "gemini-2.5-flash-lite", "gemini-2.5-flash"),
-    SMART: (LIVE,
-            "gemini-3.5-flash", "gemini-3.8-flash", "gemini-3.6-flash",
-            "gemini-flash-latest", "gemini-3.7-flash",
-            "gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.1-flash-lite",
-            "gemini-3-flash-preview", "gemini-2.5-flash", "gemini-2.5-flash-lite"),
+    FAST: (
+        "gemini-3.5-flash-lite",
+        "gemini-flash-lite-latest",
+        "gemini-3.1-flash-lite",
+        "gemini-3.8-flash",
+        "gemini-3.5-flash",
+        "gemini-flash-latest",
+        LIVE,
+    ),
+    SMART: (
+        "gemini-3.5-flash-lite",
+        "gemini-flash-lite-latest",
+        "gemini-3.1-flash-lite",
+        "gemini-3.8-flash",
+        "gemini-3.5-flash",
+        "gemini-flash-latest",
+        LIVE,
+    ),
     # Grounded search needs response.candidates[...].grounding_metadata, which a
     # Live turn does not produce. REST only, and it says so rather than silently
     # returning an answer with no sources behind it.
-    SEARCH: ("gemini-3.5-flash", "gemini-flash-latest", "gemini-3.8-flash",
-             "gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"),
+    SEARCH: (
+        "gemini-3.5-flash-lite",
+        "gemini-flash-lite-latest",
+        "gemini-3.1-flash-lite",
+        "gemini-3.8-flash",
+        "gemini-3.5-flash",
+        "gemini-flash-latest",
+    ),
 }
 
 # The conversation's own model, and ONE careful fallback behind it.
@@ -852,27 +866,28 @@ def call(contents, tier: str = FAST, config=None,
             if is_key_error(msg) and not model.startswith(PROVIDER_PREFIX):
                 key_refused = True
                 print(f"[Gemini] the API key was refused — {msg[:120]}")
-                if has_alternative_keys():
-                    new_key = rotate_api_key(failed_key=resolved_key, reason="key_refused")
-                    if new_key and new_key != resolved_key:
-                        return call(contents, tier=tier, config=config, timeout_ms=timeout_ms, key=new_key, provider=provider)
+                break  # Key itself is invalid, rotate to next key
             elif is_quota_error(msg):
                 _cool(model)
-                print(f"[Gemini] {model}: out of quota — skipping it for "
-                      f"{_COOLDOWN_SECONDS // 60} minutes")
-                if has_alternative_keys():
-                    new_key = rotate_api_key(failed_key=resolved_key, reason="quota_exhausted")
-                    if new_key and new_key != resolved_key:
-                        return call(contents, tier=tier, config=config, timeout_ms=timeout_ms, key=new_key, provider=provider)
+                print(f"[Gemini] {model}: out of quota — trying next model in ladder")
+                continue  # Gracefully fall through to next model on this key
             elif is_gone_error(msg):
                 _cool(model, _GONE_SECONDS)
-                print(f"[Gemini] {model}: unavailable to this key — set aside")
+                print(f"[Gemini] {model}: unavailable to this key — trying next model")
+                continue
             elif is_unavailable_error(msg):
                 _cool(model, _UNAVAILABLE_SECONDS)
-                print(f"[Gemini] {model}: not answering — resting it for "
-                      f"{_UNAVAILABLE_SECONDS // 60} minutes")
+                print(f"[Gemini] {model}: not answering / overloaded — trying next model")
+                continue
             else:
                 print(f"[Gemini] {model}: {type(e).__name__}: {msg[:140]}")
+
+    # If all models on this key were exhausted or key was refused, seamlessly rotate to next key in pool
+    if has_alternative_keys():
+        new_key = rotate_api_key(failed_key=resolved_key, reason="key_refused" if key_refused else "all_models_exhausted")
+        if new_key and new_key != resolved_key:
+            return call(contents, tier=tier, config=config, timeout_ms=timeout_ms, key=new_key, provider=provider)
+
     return None
 
 
