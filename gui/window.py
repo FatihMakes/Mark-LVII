@@ -85,6 +85,10 @@ from gui.overlays import (
 from gui.providers_panel import (
     ProvidersOverlay,
 )
+from gui.perplexity_nav import PerplexitySidebar
+from gui.perplexity_composer import PerplexityComposer
+from gui.perplexity_context_panel import PerplexityContextPanel
+from gui.perplexity_workspace import PerplexityWorkspace
 
 from PyQt6.QtWidgets import QGridLayout
 
@@ -172,11 +176,15 @@ class MainWindow(QMainWindow):
         root.addWidget(self._build_header())
 
         body = QHBoxLayout()
-        body.setContentsMargins(10, 10, 10, 10)
-        body.setSpacing(10)
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
 
+        # 1. Collapsible Left Sidebar (Perplexity navigation)
+        self._sidebar = PerplexitySidebar(self)
+        body.addWidget(self._sidebar, stretch=0)
+
+        # 2. Build Telemetry and Tasks components (mounted into right panel tabs)
         self._left_panel = self._build_left_panel()
-        body.addWidget(self._left_panel, stretch=0)
 
         # Center column: HUD + resizable content panel via QSplitter
         self.hud = HudCanvas(face_path, _display)
@@ -356,7 +364,7 @@ class MainWindow(QMainWindow):
         self._hud_cam_stack.addWidget(self._video_cont)
 
         self._center_split = QSplitter(Qt.Orientation.Vertical)
-        self._center_split.setHandleWidth(10)
+        self._center_split.setHandleWidth(8)
         self._center_split.setStyleSheet(f"""
             QSplitter::handle {{ background: transparent; }}
             QSplitter::handle:hover {{ background: {C.PRI_GHO}; }}
@@ -367,13 +375,46 @@ class MainWindow(QMainWindow):
         self._center_split.setStretchFactor(0, 3)
         self._center_split.setStretchFactor(1, 1)
         self._center_split.setCollapsible(0, False)
-        body.addWidget(self._center_split, stretch=5)
 
+        # Central Area (Perplexity Workspace + Bottom Universal Composer)
+        self._center_area = QWidget()
+        self._center_area.setStyleSheet("background: transparent;")
+        center_lay = QVBoxLayout(self._center_area)
+        center_lay.setContentsMargins(0, 0, 0, 0)
+        center_lay.setSpacing(0)
+
+        self._workspace = PerplexityWorkspace(self)
+        self._workspace.set_hud_widget(self._center_split)
+        center_lay.addWidget(self._workspace, stretch=1)
+
+        self._composer = PerplexityComposer(self)
+        center_lay.addWidget(self._composer, stretch=0)
+        body.addWidget(self._center_area, stretch=5)
+
+        # Right Contextual Panel
         self._right_panel = self._build_right_panel()
         body.addWidget(self._right_panel, stretch=0)
 
         root.addLayout(body, stretch=1)
         root.addWidget(self._build_footer())
+
+        # Wire Perplexity Navigation Sidebar
+        self._sidebar.mode_selected.connect(self._on_sidebar_mode)
+        self._sidebar.new_chat_clicked.connect(self._on_new_chat)
+        self._sidebar.settings_action.connect(self._on_sidebar_action)
+
+        # Wire Perplexity Workspace
+        self._workspace.prompt_selected.connect(self._on_prompt_selected)
+        self._workspace.mode_changed.connect(self._sidebar.set_active_mode)
+        self._workspace.engine_clicked.connect(self._open_providers)
+        self._workspace.context_panel_toggled.connect(self._toggle_context_panel)
+
+        # Wire Universal Composer
+        self._composer.submitted.connect(self._send_text)
+        self._composer.file_attached.connect(self._on_file_selected)
+        self._composer.file_cleared.connect(self._on_composer_file_cleared)
+        self._composer.mic_toggled.connect(self._toggle_mute)
+        self._composer.interrupt_called.connect(self._do_interrupt)
 
         # Quick-access drawer (floating overlay, built after central widget layout is done)
         self._quick_drawer = self._build_quick_drawer()
@@ -396,7 +437,7 @@ class MainWindow(QMainWindow):
         self._metric_tmr.start(2000)
         self._update_metrics()
 
-        self._log_sig.connect(self._log.append_log)
+        self._log_sig.connect(self._on_log_received)
         self._state_sig.connect(self._apply_state)
         self._content_sig.connect(self._show_content)
         self._codejob_sig.connect(self._show_code_job)
@@ -439,6 +480,16 @@ class MainWindow(QMainWindow):
         sc_full.activated.connect(self._toggle_fullscreen)
         sc_intr = QShortcut(QKeySequence("Escape"), self)
         sc_intr.activated.connect(self._do_interrupt)
+
+        # Mode switching & new thread shortcuts
+        sc_m0 = QShortcut(QKeySequence("Ctrl+1"), self)
+        sc_m0.activated.connect(lambda: self._workspace.set_mode(0))
+        sc_m1 = QShortcut(QKeySequence("Ctrl+2"), self)
+        sc_m1.activated.connect(lambda: self._workspace.set_mode(1))
+        sc_m2 = QShortcut(QKeySequence("Ctrl+3"), self)
+        sc_m2.activated.connect(lambda: self._workspace.set_mode(2))
+        sc_new = QShortcut(QKeySequence("Ctrl+K"), self)
+        sc_new.activated.connect(self._on_new_chat)
 
     def _show_camera_frame(self, img_bytes: bytes):
         """Slot — display camera preview overlay (main thread)."""
@@ -1473,12 +1524,12 @@ class MainWindow(QMainWindow):
         ])
 
     def _build_left_panel(self) -> QWidget:
-        w = QWidget()
-        w.setStyleSheet("background: transparent;")
-        w.setFixedWidth(200)
-        lay = QVBoxLayout(w)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(10)
+        # 1. Telemetry Container (Systems, Network Sparkline, Status rows)
+        self._telemetry_box = QWidget()
+        self._telemetry_box.setStyleSheet("background: transparent;")
+        t_lay = QVBoxLayout(self._telemetry_box)
+        t_lay.setContentsMargins(0, 0, 0, 0)
+        t_lay.setSpacing(10)
 
         sysp = HoloPanel("SYSTEMS", "LIVE")
         grid_w = QWidget()
@@ -1493,12 +1544,12 @@ class MainWindow(QMainWindow):
         for i, g in enumerate((self._g_cpu, self._g_mem, self._g_gpu, self._g_tmp)):
             grid.addWidget(g, i // 2, i % 2)
         sysp.body.addWidget(grid_w)
-        lay.addWidget(sysp)
+        t_lay.addWidget(sysp)
 
         self._net_panel = HoloPanel("NETWORK", "--")
         self._net_spark = Sparkline(samples=60, floor=0.25)
         self._net_panel.body.addWidget(self._net_spark)
-        lay.addWidget(self._net_panel)
+        t_lay.addWidget(self._net_panel)
 
         stp = HoloPanel("STATUS", "")
         os_name = {"Windows": "WINDOWS", "Darwin": "MACOS", "Linux": "LINUX"}.get(_OS, _OS.upper())
@@ -1511,7 +1562,15 @@ class MainWindow(QMainWindow):
         for row in (self._row_uptime, self._row_proc, self._row_net, self._row_os,
                     self._row_engine, self._row_voice):
             stp.body.addWidget(row)
-        lay.addWidget(stp)
+        t_lay.addWidget(stp)
+        t_lay.addStretch()
+
+        # 2. Tasks & Routines Container
+        self._tasks_box = QWidget()
+        self._tasks_box.setStyleSheet("background: transparent;")
+        tsk_lay = QVBoxLayout(self._tasks_box)
+        tsk_lay.setContentsMargins(0, 0, 0, 0)
+        tsk_lay.setSpacing(10)
 
         # Background tasks (core/tasks). Read from the engine every two seconds —
         # an in-memory list, no disk — and hidden rows cost nothing to paint.
@@ -1534,21 +1593,16 @@ class MainWindow(QMainWindow):
         self._tasks_empty.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
         rows_lay.addWidget(self._tasks_empty)
         rows_lay.addStretch()
-        # Scrolls rather than grows: the column must fit an 580-pixel-high
-        # window, and a task list that pushes the gauges into each other is
-        # worse than one that scrolls.
+
         scroll = QScrollArea()
         scroll.setWidget(rows_box)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }" + scroll_css())
+        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }\n" + scroll_css())
         scroll.viewport().setStyleSheet("background: transparent;")
         scroll.setMinimumHeight(24)
 
-        # Routines (core/routines) share the panel, switched from its header: the
-        # column has no room for another panel, and both lists answer the same
-        # question — what is the assistant doing without being asked.
         from PyQt6.QtWidgets import QStackedWidget
         r_box = QWidget()
         r_box.setStyleSheet("background: transparent;")
@@ -1575,7 +1629,7 @@ class MainWindow(QMainWindow):
         r_scroll.setWidgetResizable(True)
         r_scroll.setFrameShape(QFrame.Shape.NoFrame)
         r_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        r_scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }" + scroll_css())
+        r_scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }\n" + scroll_css())
         r_scroll.viewport().setStyleSheet("background: transparent;")
         r_scroll.setMinimumHeight(24)
 
@@ -1593,12 +1647,13 @@ class MainWindow(QMainWindow):
         self._panel_switch.setStyleSheet(btn_css("dim", align="center"))
         self._panel_switch.clicked.connect(self._flip_tasks_panel)
         self._tasks_panel.add_header_widget(self._panel_switch)
-        lay.addWidget(self._tasks_panel, stretch=1)
+        tsk_lay.addWidget(self._tasks_panel, stretch=1)
+
         self._tasks_tmr = QTimer(self)
         self._tasks_tmr.timeout.connect(self._refresh_tasks)
         self._tasks_tmr.start(2000)
         self._refresh_identity_rows()
-        return w
+        return self._telemetry_box
 
     def _flip_tasks_panel(self) -> None:
         to_routines = self._tasks_stack.currentIndex() == 0
@@ -1728,45 +1783,30 @@ class MainWindow(QMainWindow):
         self._show_content("BACKGROUND TASK", body[:4000])
 
     def _build_right_panel(self) -> QWidget:
-        w = QWidget()
-        w.setStyleSheet("background: transparent;")
-        w.setFixedWidth(300)
-        lay = QVBoxLayout(w)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(10)
-
-        comm = HoloPanel("COMMUNICATIONS", "LOG")
+        # Create LogWidget and drop zone for compatibility
         self._log = LogWidget()
-        comm.body.addWidget(self._log)
-        lay.addWidget(comm, stretch=1)
-
-        cmd = HoloPanel("COMMAND", "INPUT")
         self._drop_zone = FileDropZone()
         self._drop_zone.file_selected.connect(self._on_file_selected)
-        cmd.body.addWidget(self._drop_zone)
-
         self._file_hint = QLabel("No file loaded")
-        self._file_hint.setFont(px_font(10))
-        self._file_hint.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
-        self._file_hint.setWordWrap(True)
-        cmd.body.addWidget(self._file_hint)
+        self._build_input_row()
 
-        cmd.body.addWidget(self._build_input_row())
-
-        row = QHBoxLayout()
-        row.setSpacing(8)
         self._mute_btn = IconButton("mic", 38, "MIC ACTIVE", "GREEN")
         self._mute_btn.setToolTip("Mute or unmute the microphone  [F4]")
         self._mute_btn.clicked.connect(self._toggle_mute)
         self._style_mute_btn()
-        row.addWidget(self._mute_btn, 1)
+
         self._interrupt_btn = IconButton("stop", 38, "INTERRUPT", "MUTED_C")
         self._interrupt_btn.setToolTip("Stop the assistant mid-sentence  [ESC]")
         self._interrupt_btn.clicked.connect(self._do_interrupt)
-        row.addWidget(self._interrupt_btn, 1)
-        cmd.body.addLayout(row)
-        lay.addWidget(cmd)
-        return w
+
+        # Build Perplexity Contextual Panel (Sources, Comms, Activity, Tasks)
+        self._context_panel = PerplexityContextPanel(self._log, self)
+        if hasattr(self, "_telemetry_box"):
+            self._context_panel.set_activity_widget(self._telemetry_box)
+        if hasattr(self, "_tasks_box"):
+            self._context_panel.set_tasks_widget(self._tasks_box)
+        self._context_panel.close_requested.connect(lambda: self._context_panel.hide())
+        return self._context_panel
 
     def _build_quick_drawer(self) -> QWidget:
         """Floating panel under the gear: the things you set once."""
@@ -2032,6 +2072,12 @@ class MainWindow(QMainWindow):
             self._content_display.textCursor().MoveOperation.Start
         )
         self._reveal_below_hud(self._content_panel, 260)
+
+        # Mirror rich answer in Perplexity central workspace and extract citations into right panel
+        if hasattr(self, "_context_panel"):
+            self._context_panel.parse_and_display_sources_from_text(text)
+        if hasattr(self, "_workspace"):
+            self._workspace.add_assistant_message(f"### {title}\n\n{text}")
 
     # ── the coding agent, live ───────────────────────────────────────────────
     # The panel under the head shows a coding job while it runs: what was asked,
@@ -2425,7 +2471,12 @@ class MainWindow(QMainWindow):
         return self._status_strip
 
     def _on_file_selected(self, path: str):
+        if path == getattr(self, "_last_selected_file", None):
+            return
+        self._last_selected_file = path
         self._current_file = path
+        if hasattr(self, "_composer") and self._composer.get_attached_file() != path:
+            self._composer.set_attached_file(path)
         p    = Path(path)
         cat  = _file_category(p)
         icon, _ = _FILE_ICONS.get(cat, _FILE_ICONS["unknown"])
@@ -3038,6 +3089,8 @@ class MainWindow(QMainWindow):
         self._muted = muted
         self.hud.muted = muted
         self._style_mute_btn()
+        if hasattr(self, "_composer"):
+            self._composer.set_muted(muted)
         if muted:
             self._apply_state("MUTED")
             self._log.append_log("SYS: Microphone muted." + (f" {note}" if note else ""))
@@ -3053,18 +3106,98 @@ class MainWindow(QMainWindow):
         self._refresh_status_strip()
 
     def _send(self):
-        txt = self._input.text().strip()
+        txt = self._input.text().strip() if hasattr(self, "_input") else ""
         if not txt: return
-        self._input.clear()
+        if hasattr(self, "_input"): self._input.clear()
+        self._send_text(txt)
+
+    def _send_text(self, txt: str):
+        txt = str(txt or "").strip()
+        if not txt:
+            return
+        if self._current_file and f"[{Path(self._current_file).name}]" not in txt:
+            full_txt = f"{txt} (attached: {self._current_file})"
+        else:
+            full_txt = txt
+
         self._log.append_log(f"You: {txt}")
+        if hasattr(self, "_workspace"):
+            self._workspace.add_user_message(txt)
         if self.on_text_command:
-            threading.Thread(target=self.on_text_command, args=(txt,), daemon=True).start()
+            threading.Thread(target=self.on_text_command, args=(full_txt,), daemon=True).start()
+
+    def _on_log_received(self, text: str):
+        self._log.append_log(text)
+        if text.startswith("JARVIS:"):
+            msg = text[len("JARVIS:"):].strip()
+            if hasattr(self, "_workspace") and msg:
+                self._workspace.add_assistant_message(msg)
+
+    def _on_sidebar_mode(self, idx: int):
+        if hasattr(self, "_workspace"):
+            self._workspace.set_mode(idx)
+        if idx == 2 and hasattr(self, "hud"):
+            self.hud.update()
+
+    def _on_prompt_selected(self, text: str):
+        if hasattr(self, "_composer"):
+            self._composer.set_text(text)
+        self._send_text(text)
+
+    def _on_new_chat(self):
+        if hasattr(self, "_workspace"):
+            self._workspace.clear_conversation()
+        if hasattr(self, "_context_panel"):
+            self._context_panel.clear_sources()
+        if hasattr(self, "_composer"):
+            self._composer.clear_attached_file()
+        self._log.append_log("SYS: New search thread started.")
+
+    def _toggle_context_panel(self):
+        if hasattr(self, "_context_panel"):
+            self._context_panel.setVisible(not self._context_panel.isVisible())
+
+    def _on_composer_file_cleared(self):
+        self._last_selected_file = None
+        self._current_file = None
+        if hasattr(self, "_file_hint"):
+            self._file_hint.setText("No file loaded")
+        if hasattr(self, "_drop_zone"):
+            self._drop_zone.clear()
+
+    def _on_sidebar_action(self, action: str):
+        if action == "settings":
+            self._toggle_drawer()
+        elif action == "news":
+            self._send_text("top world news today")
+        elif action == "library":
+            reports_dir = CONFIG_DIR.parent / "reports"
+            if reports_dir.exists():
+                files = sorted(reports_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+                if files:
+                    summary = "\n".join([f"- **{f.stem}**" for f in files[:8]])
+                    self._show_content("LIBRARY — Saved Reports & Documents", f"### Available Research & Reports\n\n{summary}\n\n*(Located in {reports_dir})*")
+        elif action == "tasks":
+            if hasattr(self, "_context_panel"):
+                self._context_panel.show()
+                self._context_panel.set_current_tab(3)
+        elif action == "memory":
+            self._open_memory_panel()
+        elif action == "plugins":
+            self._open_plugin_manager()
+        elif action == "remote":
+            self._open_remote()
 
     def _apply_state(self, state: str):
         self.hud.state    = state
         self.hud.speaking = (state == "SPEAKING")
         if hasattr(self, "_state_chip"):
             self._state_chip.set_state(state)
+        if hasattr(self, "_composer"):
+            self._composer.set_speaking(state == "SPEAKING")
+        if hasattr(self, "_workspace"):
+            mode_lbl = getattr(self, "_engine_label", "GEMINI LIVE")
+            self._workspace.set_engine_label(mode_lbl)
 
     def _check_config(self) -> bool:
         d = _read_full_config()
