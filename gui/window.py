@@ -114,6 +114,7 @@ class MainWindow(QMainWindow):
     _video_mute_sig  = pyqtSignal(bool)
     _video_seek_sig  = pyqtSignal(float, bool)          # seconds, relative
     _video_pause_sig = pyqtSignal(bool)
+    _video_duck_sig  = pyqtSignal(bool)
     _clipboard_sig  = pyqtSignal(str)        # clipboard text changed (thread-safe)
     _confirm_sig    = pyqtSignal(str, str)   # (title, detail) — irreversible-action gate
     _confirm_hide_sig = pyqtSignal()
@@ -463,6 +464,7 @@ class MainWindow(QMainWindow):
         self._video_mute_sig.connect(self._on_video_mute)
         self._video_seek_sig.connect(self._on_video_seek)
         self._video_pause_sig.connect(self._on_video_pause)
+        self._video_duck_sig.connect(self._on_duck_video)
         self._clipboard_sig.connect(self._show_clipboard_panel)
         self._wake_dl_sig.connect(self._on_wake_install_done)
         self._quiz_sig.connect(self._show_quiz)
@@ -740,30 +742,35 @@ class MainWindow(QMainWindow):
     def _on_video_mute(self, muted: bool) -> None:
         self._set_video_muted(muted)
 
+    def _on_duck_video(self, duck: bool) -> None:
+        """Smoothly duck or restore video audio during user / assistant speech."""
+        out = self._video_sound_out if self._video_split else self._video_audio
+        if not out:
+            return
+        try:
+            if duck:
+                if not getattr(self, "_video_is_ducked", False):
+                    self._video_is_ducked = True
+                    try:
+                        self._video_pre_duck_vol = out.volume()
+                    except Exception:
+                        self._video_pre_duck_vol = 1.0
+                    out.setVolume(0.12)
+            else:
+                if getattr(self, "_video_is_ducked", False):
+                    self._video_is_ducked = False
+                    vol = getattr(self, "_video_pre_duck_vol", 1.0)
+                    out.setVolume(vol)
+        except Exception:
+            pass
+
     def _sync_mic_for_video(self) -> None:
-        """Close the microphone while the video is making sound.
-
-        JARVIS subtracts its OWN output from the microphone — that is what
-        core/echo.py does — but a video plays through a different output
-        entirely, so the guard has never heard of it and the assistant answers
-        the film. There is no arrangement in which an open microphone and a
-        loudspeaker in the same room do not do that.
-
-        So the microphone closes for exactly as long as the sound is on, and
-        opens again by itself the moment it goes off or the video is closed.
-        Only if JARVIS closed it: a microphone the user muted themselves stays
-        muted, and pressing the mute key during a video hands the decision back
-        to them for good.
-        """
-        sound_on = bool(self._video_on and self._video_sound_out
-                        and not self._video_sound_out.isMuted())
-        if sound_on and not self._muted:
-            self._video_auto_muted = True
-            self._set_muted(True, "The video's sound is on — silence it, close "
-                                  "it, or press F4 to talk. Typing still works.")
-        elif not sound_on and self._video_auto_muted:
+        """Keep the microphone open and ready for wake-word and user interaction.
+        Video volume is automatically ducked during user or assistant speech
+        instead of hard-muting the microphone."""
+        if getattr(self, "_video_auto_muted", False):
             self._video_auto_muted = False
-            self._set_muted(False, "The video is quiet again.")
+            self._set_muted(False)
 
     def _sync_video_sound(self) -> None:
         """Keep the separate soundtrack in step with the picture.

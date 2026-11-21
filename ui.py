@@ -365,6 +365,11 @@ class JarvisUI:
         """Thread-safe: pause or resume the video on the display."""
         self._win._video_pause_sig.emit(bool(paused))
 
+    def duck_video(self, duck: bool = True) -> None:
+        """Thread-safe: smoothly duck/restore video volume during user or assistant speech."""
+        if self._win and hasattr(self._win, "_video_duck_sig"):
+            self._win._video_duck_sig.emit(bool(duck))
+
     def video_state(self) -> dict:
         """kind ('video' | 'image' | ''), position, duration (seconds), paused."""
         try:

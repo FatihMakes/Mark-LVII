@@ -93,7 +93,13 @@ def is_voice_match_enabled() -> bool:
         return False
     try:
         data = json.loads(VOICEPRINT_FILE.read_text(encoding="utf-8"))
-        return bool(data.get("enabled", False) and data.get("calibrated_real", False))
+        if not (data.get("enabled", False) and data.get("calibrated_real", False)):
+            return False
+        vec = data.get("vector")
+        if not vec or not isinstance(vec, list) or len(vec) < 10:
+            return False
+        arr = np.array(vec, dtype=np.float32)
+        return bool(np.all(np.isfinite(arr)))
     except Exception:
         return False
 
@@ -147,7 +153,9 @@ def verify_speaker(audio_data: np.ndarray, sample_rate: int = 16000) -> Tuple[bo
     try:
         profile = json.loads(VOICEPRINT_FILE.read_text(encoding="utf-8"))
         owner_name = profile.get("owner", OWNER_DEFAULT_NAME)
-        ref_vec = np.array(profile["vector"], dtype=np.float32)
+        ref_vec = np.array(profile.get("vector", []), dtype=np.float32)
+        if not np.all(np.isfinite(ref_vec)):
+            return True, 1.0, OWNER_DEFAULT_NAME
 
         cur_vec = _extract_acoustic_features(audio_data, sample_rate)
 

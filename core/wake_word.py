@@ -27,7 +27,7 @@ from typing import Callable
 # Pretrained openwakeword model that listens for "Hey Jarvis".
 WAKE_MODEL = "hey_jarvis"
 # Score in [0,1]; above this counts as a detection. Tunable per environment.
-DEFAULT_THRESHOLD = 0.5
+DEFAULT_THRESHOLD = 0.45
 # Mic frames arrive at 16 kHz int16; this is just the detector's input rate.
 SAMPLE_RATE = 16000
 
@@ -129,6 +129,17 @@ class WakeWordDetector:
         self._model = None
         self._ready = False
         self._reset_pending = False
+        self._jarvis_weights = None
+        self._jarvis_bias = 0.0
+        head_path = Path(__file__).resolve().parent / "jarvis_head.npz"
+        if head_path.is_file():
+            try:
+                import numpy as np
+                data = np.load(head_path)
+                self._jarvis_weights = data["weights"].astype(np.float32)
+                self._jarvis_bias = float(data["bias"])
+            except Exception as e:
+                self._logger(f"Wake word: could not load jarvis head — {e}")
 
     def start(self) -> bool:
         """Load the model and spawn the inference thread. Returns True on success.
@@ -213,6 +224,15 @@ class WakeWordDetector:
                             score = max(score, float(v))
                     if score == 0.0 and scores:
                         score = max(float(v) for v in scores.values())
+
+                if self._jarvis_weights is not None and hasattr(self._model, "preprocessor"):
+                    buf = getattr(self._model.preprocessor, "feature_buffer", None)
+                    if buf is not None and len(buf) >= 16:
+                        feat = buf[-16:].flatten()
+                        z = float(np.dot(feat, self._jarvis_weights) + self._jarvis_bias)
+                        jarvis_score = float(1.0 / (1.0 + np.exp(-np.clip(z, -30.0, 30.0))))
+                        score = max(score, jarvis_score)
+
                 if score >= self._threshold:
                     # drain any backlog and clear the model, so one utterance is one wake
                     self._drain()

@@ -834,6 +834,10 @@ class JarvisLive:
         if not self.ui.muted:
             self.ui.set_state("LISTENING")
         self.ui.write_log(f"SYS: Awake — {reason}.")
+        try:
+            self.ui.duck_video(True)
+        except Exception:
+            pass
 
     def sleep(self, reason: str = "timeout") -> None:
         if not self._awake:
@@ -845,6 +849,10 @@ class JarvisLive:
         self.set_speaking(False)
         self.ui.set_state("SLEEPING")
         self.ui.write_log(f"SYS: Sleeping — {reason}. Say 'Hey Jarvis' to wake me.")
+        try:
+            self.ui.duck_video(False)
+        except Exception:
+            pass
 
     async def _run_sleep_watch(self) -> None:
         """Auto-sleep after the configured silence window (wake-word mode only)."""
@@ -1319,8 +1327,16 @@ class JarvisLive:
             self._out_level = 0.0
         if value:
             self.ui.set_state("SPEAKING")
+            try:
+                self.ui.duck_video(True)
+            except Exception:
+                pass
         elif not self.ui.muted:
             self.ui.set_state("LISTENING")
+            try:
+                self.ui.duck_video(False)
+            except Exception:
+                pass
 
     def set_push_to_talk(self, enabled: bool) -> str:
         """Turn hold-to-talk on or off. Returns the scope actually achieved."""
