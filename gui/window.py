@@ -151,6 +151,7 @@ class MainWindow(QMainWindow):
         self.on_text_command   = None
         self.on_remote_clicked = None   # callable: () -> (url, key) | None
         self.on_interrupt      = None   # callable: () -> None — stop JARVIS mid-speech
+        self.on_mute_change    = None   # callable: (muted: bool) -> None — notify audio engine
         self.on_voice_change   = None   # callable: () -> None — rebuild session with new voice
         self.on_audio_device_change = None  # callable: () -> None — reopen audio streams
         self._confirm_overlay  = None   # live ConfirmBanner, if one is on screen
@@ -3228,6 +3229,11 @@ class MainWindow(QMainWindow):
         else:
             self._apply_state("LISTENING")
             self._log.append_log("SYS: Microphone active." + (f" {note}" if note else ""))
+        if self.on_mute_change:
+            try:
+                self.on_mute_change(muted)
+            except Exception:
+                pass
 
     def _style_mute_btn(self):
         if self._muted:

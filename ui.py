@@ -144,6 +144,14 @@ class JarvisUI:
         self._win.on_interrupt = cb
 
     @property
+    def on_mute_change(self):
+        return getattr(self._win, "on_mute_change", None)
+
+    @on_mute_change.setter
+    def on_mute_change(self, cb):
+        self._win.on_mute_change = cb
+
+    @property
     def on_voice_change(self):
         return self._win.on_voice_change
 

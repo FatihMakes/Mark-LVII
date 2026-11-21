@@ -677,6 +677,7 @@ class JarvisLive:
         self.ui.on_text_command   = self._on_text_command
         self.ui.on_remote_clicked = self._make_remote_key
         self.ui.on_interrupt      = self.interrupt
+        self.ui.on_mute_change    = self._on_ui_mute_change
         self.ui.on_voice_change   = self._on_voice_change     # voice picker → rebuild session
         self.ui.on_audio_device_change = self._on_audio_device_change
         self._reconnect_event: asyncio.Event | None = None
@@ -1174,6 +1175,19 @@ class JarvisLive:
         voice is a deliberate, rare act; losing it on a dropped packet was not."""
         self.request_reconnect(keep_context=False, reason="new voice")
 
+    def _on_ui_mute_change(self, muted: bool):
+        """Microphone muted or unmuted from UI controls or shortcuts."""
+        if not muted:
+            self.wake(reason="microphone active")
+            self._last_user_speech = time.monotonic()
+            print("[JARVIS] 🎤 Mic unmuted — resumed listening.")
+            if self.session is None:
+                self._conn_backoff = 1
+                self.request_reconnect(keep_context=True, reason="unmuted")
+        else:
+            print("[JARVIS] 🔇 Mic muted.")
+            self.interrupt()
+
     def _on_audio_device_change(self):
         """Microphone or speaker changed. Both streams are opened inside the
         session TaskGroup, so they can only be re-opened by rebuilding it —
@@ -1251,12 +1265,8 @@ class JarvisLive:
     def _on_text_command(self, text: str):
         if not self._loop or not self.session:
             return
-        # Respect wake-word sleep: a typed command must not be answered while
-        # asleep either (the sleep gate is not just for the mic). Wake first with
-        # "Hey Jarvis" or the WAKE NOW button.
         if self._wake_enabled and not self._awake:
-            self.ui.write_log("SYS: I'm asleep — say 'Hey Jarvis' or tap WAKE NOW first.")
-            return
+            self.wake(reason="typed command")
         asyncio.run_coroutine_threadsafe(
             self.session.send_client_content(
                 turns={"role": "user", "parts": [{"text": text}]},
@@ -3078,7 +3088,10 @@ class JarvisLive:
                     self._keep_task(asyncio.create_task(self._save_session_summary()))
 
             self.set_speaking(False)
-            self.ui.set_state("SLEEPING")
+            if self._wake_enabled and not self._awake:
+                self.ui.set_state("SLEEPING")
+            else:
+                self.ui.set_state("INITIALISING")
 
             if self._dashboard:
                 await self._dashboard.broadcast({"type": "status", "state": "sleeping"})

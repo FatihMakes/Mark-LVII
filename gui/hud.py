@@ -549,40 +549,7 @@ class HudCanvas(QWidget):
                        Qt.AlignmentFlag.AlignCenter, name)
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            pos = event.position()
-            if self._btn_interrupt_rect.contains(pos):
-                self.interrupt_clicked.emit()
-                event.accept()
-                return
-            if self._btn_mic_rect.contains(pos):
-                self.mic_clicked.emit()
-                event.accept()
-                return
         super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event):
-        pos = event.position()
-        old_hover = self._hovered_btn
-        if self._btn_interrupt_rect.contains(pos):
-            self._hovered_btn = "interrupt"
-            self.setCursor(Qt.CursorShape.PointingHandCursor)
-        elif self._btn_mic_rect.contains(pos):
-            self._hovered_btn = "mic"
-            self.setCursor(Qt.CursorShape.PointingHandCursor)
-        else:
-            self._hovered_btn = None
-            self.setCursor(Qt.CursorShape.ArrowCursor)
-        if self._hovered_btn != old_hover:
-            self.update()
-        super().mouseMoveEvent(event)
-
-    def leaveEvent(self, event):
-        if self._hovered_btn is not None:
-            self._hovered_btn = None
-            self.setCursor(Qt.CursorShape.ArrowCursor)
-            self.update()
-        super().leaveEvent(event)
 
     def paintEvent(self, _):
         p = QPainter(self)
@@ -618,49 +585,24 @@ class HudCanvas(QWidget):
                 txt, col = "Thinking...", qcol(C.ACC2)
             elif self.state == "LISTENING":
                 txt, col = "Say something...", qcol(C.PRI)
+            elif self.state == "SLEEPING":
+                txt, col = "Say 'Hey Jarvis' to wake me...", qcol(C.TEXT_DIM)
             else:
                 txt, col = "Say something...", qcol(C.PRI)
 
-            txt_y = core_cy + r + 34.0
-            p.setFont(px_font(13.5, QFont.Weight.Medium))
+            txt_y = core_cy + r + 36.0
+            p.setFont(px_font(14, QFont.Weight.Medium))
             p.setPen(QPen(col))
             p.drawText(QRectF(0, txt_y, W, 24), Qt.AlignmentFlag.AlignCenter, txt)
 
-            # Perplexity round control buttons [✕] (interrupt) and [🎤] (mic)
-            btn_y = txt_y + 46.0
-            btn_r = 18.0
-            gap = 56.0
-            self._btn_interrupt_rect = QRectF(cx - gap / 2.0 - btn_r, btn_y - btn_r, btn_r * 2.0, btn_r * 2.0)
-            self._btn_mic_rect = QRectF(cx + gap / 2.0 - btn_r, btn_y - btn_r, btn_r * 2.0, btn_r * 2.0)
-
-            # [✕] button
-            is_intr_hover = self._hovered_btn == "interrupt"
-            p.setBrush(QBrush(qcol(C.HOVER if is_intr_hover else C.ACTIVE)))
-            p.setPen(QPen(qcol(C.BORDER_B if is_intr_hover else C.BORDER), 1))
-            p.drawEllipse(QPointF(cx - gap / 2.0, btn_y), btn_r, btn_r)
-            p.setFont(px_font(12, QFont.Weight.Bold))
-            p.setPen(QPen(qcol(C.WHITE if is_intr_hover else C.TEXT_DIM)))
-            p.drawText(self._btn_interrupt_rect, Qt.AlignmentFlag.AlignCenter, "✕")
-
-            # [🎤] button
-            is_mic_hover = self._hovered_btn == "mic"
-            p.setBrush(QBrush(qcol(C.HOVER if is_mic_hover else C.ACTIVE)))
-            p.setPen(QPen(qcol(C.BORDER_B if is_mic_hover else C.BORDER), 1))
-            p.drawEllipse(QPointF(cx + gap / 2.0, btn_y), btn_r, btn_r)
-            mic_c = qcol(C.GREEN) if (self.state == "LISTENING" and not self.muted) else (qcol(C.MUTED_C) if self.muted else qcol(C.WHITE if is_mic_hover else C.TEXT_DIM))
-            p.setFont(px_font(12, QFont.Weight.Bold))
-            p.setPen(QPen(mic_c))
-            p.drawText(self._btn_mic_rect, Qt.AlignmentFlag.AlignCenter, "🎤")
-
-            # In Perplexity 3D mode, the particle sphere is itself the real-time audio visualizer!
-            # Suppressing the retro bar waveform here guarantees ZERO collision and 100% fidelity to Perplexity.
+            # Clean and pristine: sphere + state caption only, zero clutter
             p.end()
             return
 
         # ── CLASSIC / FACE HUD MODE FALLBACK ─────────────────────────────────
         # The state line and the waveform take the bottom of the canvas; the
         # centrepiece gets the band above them, at any window size.
-        sy = min(cy + fw * 0.38, H - 90.0)
+        sy = min(cy + fw * 0.38, H - 74.0)
         band_t = 30.0
         band_h = max(60.0, sy - 14.0 - band_t)
 
@@ -692,6 +634,8 @@ class HudCanvas(QWidget):
             txt, col = "Thinking...", qcol(C.ACC2)
         elif self.state == "LISTENING":
             txt, col = "Say something...", qcol(C.PRI)
+        elif self.state == "SLEEPING":
+            txt, col = "Say 'Hey Jarvis' to wake me...", qcol(C.TEXT_DIM)
         else:
             txt, col = "Say something...", qcol(C.PRI)
 
@@ -699,32 +643,8 @@ class HudCanvas(QWidget):
         p.setPen(QPen(col))
         p.drawText(QRectF(0, sy, W, 24), Qt.AlignmentFlag.AlignCenter, txt)
 
-        # Control buttons
-        btn_y = sy + 36.0
-        btn_r = 16.0
-        gap = 52.0
-        self._btn_interrupt_rect = QRectF(cx - gap / 2.0 - btn_r, btn_y - btn_r, btn_r * 2.0, btn_r * 2.0)
-        self._btn_mic_rect = QRectF(cx + gap / 2.0 - btn_r, btn_y - btn_r, btn_r * 2.0, btn_r * 2.0)
-
-        is_intr_hover = self._hovered_btn == "interrupt"
-        p.setBrush(QBrush(qcol(C.HOVER if is_intr_hover else C.ACTIVE)))
-        p.setPen(QPen(qcol(C.BORDER_B if is_intr_hover else C.BORDER), 1))
-        p.drawEllipse(QPointF(cx - gap / 2.0, btn_y), btn_r, btn_r)
-        p.setFont(px_font(11, QFont.Weight.Bold))
-        p.setPen(QPen(qcol(C.WHITE if is_intr_hover else C.TEXT_DIM)))
-        p.drawText(self._btn_interrupt_rect, Qt.AlignmentFlag.AlignCenter, "✕")
-
-        is_mic_hover = self._hovered_btn == "mic"
-        p.setBrush(QBrush(qcol(C.HOVER if is_mic_hover else C.ACTIVE)))
-        p.setPen(QPen(qcol(C.BORDER_B if is_mic_hover else C.BORDER), 1))
-        p.drawEllipse(QPointF(cx + gap / 2.0, btn_y), btn_r, btn_r)
-        mic_c = qcol(C.GREEN) if (self.state == "LISTENING" and not self.muted) else (qcol(C.MUTED_C) if self.muted else qcol(C.WHITE if is_mic_hover else C.TEXT_DIM))
-        p.setFont(px_font(11, QFont.Weight.Bold))
-        p.setPen(QPen(mic_c))
-        p.drawText(self._btn_mic_rect, Qt.AlignmentFlag.AlignCenter, "🎤")
-
-        # Audio bar waveform placed safely BELOW the buttons with generous clearance
-        wy = btn_y + 38.0
+        # Audio bar waveform placed safely below caption
+        wy = sy + 38.0
         N = 48
         span = min(W * 0.60, 420.0)
         bw = span / N
