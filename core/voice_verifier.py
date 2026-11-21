@@ -34,6 +34,7 @@ def _extract_acoustic_features(audio_data: np.ndarray, sample_rate: int = 16000)
         signal = audio_data.astype(np.float32) / 32768.0
     else:
         signal = audio_data.astype(np.float32)
+    signal = signal.flatten()
 
     if len(signal) < 256:
         return np.zeros(20, dtype=np.float32)

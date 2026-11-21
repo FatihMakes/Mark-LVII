@@ -603,11 +603,24 @@ class MainWindow(QMainWindow):
         self._video_mute_btn.setVisible(True)
         self._set_video_muted(bool(muted))
 
-        url = (QUrl.fromLocalFile(source) if Path(source).exists()
-               else QUrl(source))
+        is_local = False
+        source_str = str(source or "").strip()
+        if not source_str.startswith(("http://", "https://", "rtsp://", "ftp://", "file://")):
+            try:
+                is_local = len(source_str) < 500 and Path(source_str).exists()
+            except Exception:
+                is_local = False
+        url = QUrl.fromLocalFile(source_str) if is_local else QUrl(source_str)
         self._video_player.setSource(url)
-        if self._video_split:
-            self._video_sound.setSource(QUrl(audio_source))
+        if self._video_split and audio_source:
+            is_audio_local = False
+            a_str = str(audio_source or "").strip()
+            if not a_str.startswith(("http://", "https://", "rtsp://", "ftp://", "file://")):
+                try:
+                    is_audio_local = len(a_str) < 500 and Path(a_str).exists()
+                except Exception:
+                    is_audio_local = False
+            self._video_sound.setSource(QUrl.fromLocalFile(a_str) if is_audio_local else QUrl(a_str))
         self._hud_cam_stack.setCurrentIndex(2)
         self._video_on = True
         # Re-run now that the video counts as playing: _set_video_muted ran
@@ -630,8 +643,12 @@ class MainWindow(QMainWindow):
         """
         pixmap = QPixmap(path)
         if pixmap.isNull():
+            try:
+                name_str = Path(path).name if len(path) < 500 and not str(path).startswith(("http://", "https://")) else str(path)[:35]
+            except Exception:
+                name_str = str(path)[:35]
             self._log.append_log(
-                f"SYS: '{Path(path).name}' could not be shown — this Qt build "
+                f"SYS: '{name_str}' could not be shown — this Qt build "
                 f"does not read that image format."
             )
             return
