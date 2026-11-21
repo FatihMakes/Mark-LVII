@@ -473,12 +473,15 @@ class HudCanvas(QWidget):
         # which is what makes it look lit rather than tinted.
         lift = 1.0 + 0.55 * amp + (0.18 if self.speaking else 0.0)
         p.setPen(Qt.PenStyle.NoPen)
-        for gr, a0, a1 in ((r * 0.70, 0.30, 0.0), (r * 0.34, 0.34, 0.0)):
+        siri_violet = QColor("#c084fc")
+        siri_cyan   = QColor("#00e5ff")
+        siri_indigo = QColor("#6366f1")
+        for gr, a0, a1, col in ((r * 0.75, 0.28, 0.0, siri_indigo), (r * 0.42, 0.45, 0.0, siri_violet), (r * 0.22, 0.70, 0.0, siri_cyan)):
             g = QRadialGradient(cx, cy, gr)
-            g.setColorAt(0.00, blend(main, min(0.95, a0 * lift)))
-            g.setColorAt(0.45, blend(main, min(0.95, a0 * lift * 0.52)))
-            g.setColorAt(0.78, blend(main, min(0.95, a0 * lift * 0.18)))
-            g.setColorAt(1.00, blend(main, a1))
+            g.setColorAt(0.00, blend(col, min(0.95, a0 * lift)))
+            g.setColorAt(0.45, blend(col, min(0.95, a0 * lift * 0.52)))
+            g.setColorAt(0.78, blend(col, min(0.95, a0 * lift * 0.18)))
+            g.setColorAt(1.00, blend(col, a1))
             p.setBrush(QBrush(g))
             p.drawEllipse(QRectF(cx - gr, cy - gr, gr * 2, gr * 2))
         p.setBrush(Qt.BrushStyle.NoBrush)

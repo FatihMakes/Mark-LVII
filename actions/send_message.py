@@ -197,13 +197,24 @@ def _send_whatsapp(receiver: str, message: str) -> str:
                 return outcome.done("send_message", platform="WhatsApp", to=receiver, verified=True)
 
             # Contact name (e.g. Mummy, Papa, Harshita)
-            # 1. Bring window forward safely via Window menu
+            # 1. Bring WhatsApp forward and trigger New Chat
             subprocess.run(['osascript', '-e', '''
             tell application "WhatsApp" to activate
+            delay 0.4
             tell application "System Events"
-                tell application process "WhatsApp"
+                tell process "WhatsApp"
                     try
                         click (last menu item of menu 1 of menu bar item "Window" of menu bar 1)
+                    end try
+                    delay 0.2
+                    try
+                        click menu item "‎New Chat" of menu 1 of menu bar item "File" of menu bar 1
+                    on error
+                        try
+                            click menu item "New Chat" of menu 1 of menu bar item "File" of menu bar 1
+                        on error
+                            keystroke "n" using command down
+                        end try
                     end try
                 end tell
             end tell
@@ -211,52 +222,19 @@ def _send_whatsapp(receiver: str, message: str) -> str:
             time.sleep(0.5)
 
             _require_pyautogui()
-            # 2. Escape twice to dismiss any lingering search/dialog
-            pyautogui.press('escape')
-            time.sleep(0.2)
-            pyautogui.press('escape')
-            time.sleep(0.3)
-
-            # 3. Search contact in main search (Cmd+F)
-            pyautogui.hotkey('command', 'f')
-            time.sleep(0.3)
-            pyautogui.hotkey('command', 'a')
-            pyautogui.press('delete')
-            time.sleep(0.1)
-
-            # Type contact name
-            pyautogui.write(clean_receiver, interval=0.03)
+            # 2. Paste contact name reliably (handles Unicode, spaces, Hindi names)
+            _paste_text(clean_receiver)
             time.sleep(0.6)
 
-            # 4. Highlight matched contact and open chat
-            pyautogui.press('down')
-            time.sleep(0.3)
+            # 3. Select matched contact and open conversation
             pyautogui.press('enter')
             time.sleep(0.6)
 
-            # 5. Focus message composer directly via window bounds
-            cx, cy = 670, 915
-            try:
-                import Quartz
-                windowList = Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionAll, Quartz.kCGNullWindowID)
-                for w in windowList:
-                    if 'WhatsApp' in w.get('kCGWindowOwnerName', ''):
-                        b = w.get('kCGWindowBounds', {})
-                        if b.get('Height', 0) > 500:
-                            cx = int(b['X']) + int(b['Width'] * 0.65)
-                            cy = int(b['Y']) + int(b['Height']) - 45
-                            break
-            except Exception:
-                pass
-
-            pyautogui.click(cx, cy)
-            time.sleep(0.3)
-
-            # 6. Paste message
+            # 4. Paste message directly into the focused composer
             _paste_text(message)
             time.sleep(0.3)
 
-            # 7. Press Return to send
+            # 5. Press Return to send
             pyautogui.press('enter')
             time.sleep(0.3)
 

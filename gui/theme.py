@@ -120,10 +120,9 @@ class C:
     BAR_BG    = "#1a2333"      # Progress bar trough
 
 
-# Keys tied to the accent colour — text and status colours stay crisp & neutral
+# Keys tied to the accent colour — dark glass surfaces and typography stay crisp & neutral
 _HUE_LINKED = (
-    "BG", "PANEL", "PANEL2", "BORDER", "BORDER_B", "BORDER_A",
-    "PRI", "PRI_DIM", "PRI_GHO", "DARK", "BAR_BG",
+    "PRI", "PRI_DIM", "PRI_GHO",
 )
 _PALETTE_DEFAULTS: dict[str, str] = {k: getattr(C, k) for k in _HUE_LINKED}
 
