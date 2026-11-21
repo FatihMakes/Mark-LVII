@@ -48,9 +48,13 @@ except Exception:      # pragma: no cover — the classic core still draws
 
 
 class HudCanvas(QWidget):
+    interrupt_clicked = pyqtSignal()
+    mic_clicked = pyqtSignal()
+
     def __init__(self, face_path: str, assistant_name: str = "J.A.R.V.I.S", parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
+        self.setMouseTracking(True)
         self.setMinimumSize(300, 300)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
@@ -58,6 +62,10 @@ class HudCanvas(QWidget):
         self.speaking = False
         self.state    = "INITIALISING"
         self._assistant_name = assistant_name
+
+        self._hovered_btn: str | None = None
+        self._btn_interrupt_rect: QRectF = QRectF()
+        self._btn_mic_rect: QRectF = QRectF()
 
         # The holographic head that fills the HUD. If it could not be imported
         # we fall back to the old glowing core so the panel is never empty.
@@ -227,7 +235,7 @@ class HudCanvas(QWidget):
             x, yy = rnd.uniform(0, W), rnd.uniform(0, H * 0.85)
             rr = rnd.uniform(0.6, 2.4) * 2
             warm = rnd.random() < 0.10
-            c = C.ACC2 if warm else (C.WHITE if rnd.random() < 0.45 else C.PRI)
+            c = C.ACC2 if warm else (C.WHITE if rnd.random() < 0.85 else QColor("#EDEDED"))
             a = rnd.uniform(0.04, 0.18)
             gg = QRadialGradient(x, yy, rr)
             gg.setColorAt(0.0, with_alpha(c, a))
@@ -540,6 +548,42 @@ class HudCanvas(QWidget):
             p.drawText(QRectF(cx - r, cy - fsz, r * 2, fsz * 2),
                        Qt.AlignmentFlag.AlignCenter, name)
 
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            pos = event.position()
+            if self._btn_interrupt_rect.contains(pos):
+                self.interrupt_clicked.emit()
+                event.accept()
+                return
+            if self._btn_mic_rect.contains(pos):
+                self.mic_clicked.emit()
+                event.accept()
+                return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        pos = event.position()
+        old_hover = self._hovered_btn
+        if self._btn_interrupt_rect.contains(pos):
+            self._hovered_btn = "interrupt"
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+        elif self._btn_mic_rect.contains(pos):
+            self._hovered_btn = "mic"
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+        else:
+            self._hovered_btn = None
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+        if self._hovered_btn != old_hover:
+            self.update()
+        super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event):
+        if self._hovered_btn is not None:
+            self._hovered_btn = None
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+            self.update()
+        super().leaveEvent(event)
+
     def paintEvent(self, _):
         p = QPainter(self)
         if not p.isActive():      # device not ready (e.g. 0-size during layout) — skip cleanly
@@ -557,9 +601,66 @@ class HudCanvas(QWidget):
 
         cx, cy = W / 2, H / 2
         fw = min(W, H)
+
+        # ── PERPLEXITY 3D VOICE HUD MODE ──────────────────────────────────────
+        if self._reactor is not None:
+            # Volumetric 3D Fibonacci sphere positioned naturally in upper-mid canvas
+            r = min(170.0, min(W * 0.23, H * 0.26))
+            core_cy = max(r + 34.0, H * 0.38)
+            self._paint_core(p, cx, core_cy, r, W, H)
+
+            # Perplexity conversational state caption (Say something... / Speaking... / Thinking...)
+            if self.muted:
+                txt, col = "Microphone Muted", qcol(C.MUTED_C)
+            elif self.speaking:
+                txt, col = "Speaking...", qcol(C.ACC)
+            elif self.state in ("THINKING", "PROCESSING"):
+                txt, col = "Thinking...", qcol(C.ACC2)
+            elif self.state == "LISTENING":
+                txt, col = "Say something...", qcol(C.PRI)
+            else:
+                txt, col = "Say something...", qcol(C.PRI)
+
+            txt_y = core_cy + r + 34.0
+            p.setFont(px_font(13.5, QFont.Weight.Medium))
+            p.setPen(QPen(col))
+            p.drawText(QRectF(0, txt_y, W, 24), Qt.AlignmentFlag.AlignCenter, txt)
+
+            # Perplexity round control buttons [✕] (interrupt) and [🎤] (mic)
+            btn_y = txt_y + 46.0
+            btn_r = 18.0
+            gap = 56.0
+            self._btn_interrupt_rect = QRectF(cx - gap / 2.0 - btn_r, btn_y - btn_r, btn_r * 2.0, btn_r * 2.0)
+            self._btn_mic_rect = QRectF(cx + gap / 2.0 - btn_r, btn_y - btn_r, btn_r * 2.0, btn_r * 2.0)
+
+            # [✕] button
+            is_intr_hover = self._hovered_btn == "interrupt"
+            p.setBrush(QBrush(qcol(C.HOVER if is_intr_hover else C.ACTIVE)))
+            p.setPen(QPen(qcol(C.BORDER_CTRL if is_intr_hover else C.BORDER), 1))
+            p.drawEllipse(QPointF(cx - gap / 2.0, btn_y), btn_r, btn_r)
+            p.setFont(px_font(12, QFont.Weight.Bold))
+            p.setPen(QPen(qcol(C.WHITE if is_intr_hover else C.TEXT_DIM)))
+            p.drawText(self._btn_interrupt_rect, Qt.AlignmentFlag.AlignCenter, "✕")
+
+            # [🎤] button
+            is_mic_hover = self._hovered_btn == "mic"
+            p.setBrush(QBrush(qcol(C.HOVER if is_mic_hover else C.ACTIVE)))
+            p.setPen(QPen(qcol(C.BORDER_CTRL if is_mic_hover else C.BORDER), 1))
+            p.drawEllipse(QPointF(cx + gap / 2.0, btn_y), btn_r, btn_r)
+            mic_c = qcol(C.GREEN) if (self.state == "LISTENING" and not self.muted) else (qcol(C.MUTED_C) if self.muted else qcol(C.WHITE if is_mic_hover else C.TEXT_DIM))
+            p.setFont(px_font(12, QFont.Weight.Bold))
+            p.setPen(QPen(mic_c))
+            p.drawText(self._btn_mic_rect, Qt.AlignmentFlag.AlignCenter, "🎤")
+
+            # In Perplexity 3D mode, the particle sphere is itself the real-time audio visualizer!
+            # Suppressing the retro bar waveform here guarantees ZERO collision and 100% fidelity to Perplexity.
+            p.end()
+            return
+
+        # ── CLASSIC / FACE HUD MODE FALLBACK ─────────────────────────────────
         # The state line and the waveform take the bottom of the canvas; the
         # centrepiece gets the band above them, at any window size.
-        sy = min(cy + fw * 0.38, H - 74.0)
+        sy = min(cy + fw * 0.38, H - 90.0)
         band_t = 30.0
         band_h = max(60.0, sy - 14.0 - band_t)
 
@@ -579,16 +680,10 @@ class HudCanvas(QWidget):
                 else:
                     acc = qcol(C.PRI)
             self._avatar.paint(p, cx, head_cy, r_head, main, acc, qcol(C.BG))
-        elif self._reactor is not None:
-            ext = Reactor3D.TOP + Reactor3D.BOTTOM
-            r = min(W * 0.25, band_h / ext)
-            core_cy = band_t + (band_h - ext * r) / 2.0 + Reactor3D.TOP * r
-            self._paint_core(p, cx, core_cy, r, W, band_h)
         else:
             r = min(W * 0.46, band_h / 2.0)
             self._paint_core_classic(p, cx, band_t + band_h / 2.0, r, W, band_h)
 
-        # Perplexity conversational state caption
         if self.muted:
             txt, col = "Microphone Muted", qcol(C.MUTED_C)
         elif self.speaking:
@@ -601,27 +696,35 @@ class HudCanvas(QWidget):
             txt, col = "Say something...", qcol(C.PRI)
 
         p.setFont(px_font(13.5, QFont.Weight.Medium))
-        tw = p.fontMetrics().horizontalAdvance(txt)
         p.setPen(QPen(col))
         p.drawText(QRectF(0, sy, W, 24), Qt.AlignmentFlag.AlignCenter, txt)
 
-        # Perplexity round control buttons [✕] (interrupt) and [🎤] (mic)
-        btn_y = sy + 38
-        p.setBrush(QBrush(qcol(C.ACTIVE)))
-        p.setPen(QPen(qcol(C.BORDER), 1))
-        p.drawEllipse(QPointF(cx - 24, btn_y), 15, 15)
-        p.drawEllipse(QPointF(cx + 24, btn_y), 15, 15)
+        # Control buttons
+        btn_y = sy + 36.0
+        btn_r = 16.0
+        gap = 52.0
+        self._btn_interrupt_rect = QRectF(cx - gap / 2.0 - btn_r, btn_y - btn_r, btn_r * 2.0, btn_r * 2.0)
+        self._btn_mic_rect = QRectF(cx + gap / 2.0 - btn_r, btn_y - btn_r, btn_r * 2.0, btn_r * 2.0)
 
+        is_intr_hover = self._hovered_btn == "interrupt"
+        p.setBrush(QBrush(qcol(C.HOVER if is_intr_hover else C.ACTIVE)))
+        p.setPen(QPen(qcol(C.BORDER_CTRL if is_intr_hover else C.BORDER), 1))
+        p.drawEllipse(QPointF(cx - gap / 2.0, btn_y), btn_r, btn_r)
         p.setFont(px_font(11, QFont.Weight.Bold))
-        p.setPen(QPen(qcol(C.TEXT_DIM)))
-        p.drawText(QRectF(cx - 39, btn_y - 15, 30, 30), Qt.AlignmentFlag.AlignCenter, "✕")
-        mic_c = qcol(C.GREEN) if (self.state == "LISTENING" and not self.muted) else qcol(C.TEXT_DIM)
-        p.setPen(QPen(mic_c))
-        p.drawText(QRectF(cx + 9, btn_y - 15, 30, 30), Qt.AlignmentFlag.AlignCenter, "🎤")
+        p.setPen(QPen(qcol(C.WHITE if is_intr_hover else C.TEXT_DIM)))
+        p.drawText(self._btn_interrupt_rect, Qt.AlignmentFlag.AlignCenter, "✕")
 
-        # waveform — the real audio level (the mic while listening, the voice
-        # while speaking), mirrored below its baseline like a reflection
-        wy = sy + 74
+        is_mic_hover = self._hovered_btn == "mic"
+        p.setBrush(QBrush(qcol(C.HOVER if is_mic_hover else C.ACTIVE)))
+        p.setPen(QPen(qcol(C.BORDER_CTRL if is_mic_hover else C.BORDER), 1))
+        p.drawEllipse(QPointF(cx + gap / 2.0, btn_y), btn_r, btn_r)
+        mic_c = qcol(C.GREEN) if (self.state == "LISTENING" and not self.muted) else (qcol(C.MUTED_C) if self.muted else qcol(C.WHITE if is_mic_hover else C.TEXT_DIM))
+        p.setFont(px_font(11, QFont.Weight.Bold))
+        p.setPen(QPen(mic_c))
+        p.drawText(self._btn_mic_rect, Qt.AlignmentFlag.AlignCenter, "🎤")
+
+        # Audio bar waveform placed safely BELOW the buttons with generous clearance
+        wy = btn_y + 38.0
         N = 48
         span = min(W * 0.60, 420.0)
         bw = span / N
@@ -632,7 +735,7 @@ class HudCanvas(QWidget):
             if self.muted:
                 hgt, c = 1.5, qcol(C.MUTED_C)
             else:
-                env = (1.0 - abs(i - mid) / mid) ** 0.7      # centre-weighted hump
+                env = (1.0 - abs(i - mid) / mid) ** 0.7
                 shimmer = 0.55 + 0.45 * math.sin(self._tick * 0.18 + i * 0.7)
                 idle = 2.0 + 1.5 * math.sin(self._tick * 0.09 + i * 0.6)
                 hgt = max(1.5, min(24.0, idle + amp * 22.0 * env * shimmer))

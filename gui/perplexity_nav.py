@@ -213,8 +213,9 @@ class PerplexitySidebar(QWidget):
 
         # Subtle separator
         sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet(f"background: {C.BORDER}; max-height: 1px; margin: 4px 0;")
+        sep.setFrameShape(QFrame.Shape.NoFrame)
+        sep.setFixedHeight(1)
+        sep.setStyleSheet(f"background: {C.BORDER}; border: none; margin: 4px 0;")
         root.addWidget(sep)
 
         # ── Scrollable Secondary Navigation ───────────────────────────────
@@ -260,8 +261,9 @@ class PerplexitySidebar(QWidget):
 
         # ── Bottom Settings & Utility ─────────────────────────────────────
         sep2 = QFrame()
-        sep2.setFrameShape(QFrame.Shape.HLine)
-        sep2.setStyleSheet(f"background: {C.BORDER}; max-height: 1px; margin: 4px 0;")
+        sep2.setFrameShape(QFrame.Shape.NoFrame)
+        sep2.setFixedHeight(1)
+        sep2.setStyleSheet(f"background: {C.BORDER}; border: none; margin: 4px 0;")
         root.addWidget(sep2)
 
         self._btn_settings = NavItemButton("⚙", "Settings")

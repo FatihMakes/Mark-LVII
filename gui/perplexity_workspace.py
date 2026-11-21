@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 from urllib.parse import urlparse
-from PyQt6.QtCore import Qt, QUrl, pyqtSignal
+from PyQt6.QtCore import QSize, Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QClipboard, QColor, QDesktopServices, QFont, QResizeEvent
 from PyQt6.QtWidgets import (
     QApplication, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
@@ -130,7 +130,8 @@ class ChatMessageCard(QFrame):
             }}
         """)
         self.setObjectName("ChatMessageCard")
-        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        self.setMaximumWidth(820)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(14, 10, 14, 10)
@@ -228,6 +229,12 @@ class ChatMessageCard(QFrame):
         h = int(self._body.document().size().height())
         self._body.setFixedHeight(max(24, h + 8))
 
+    def sizeHint(self) -> QSize:
+        p = self.parentWidget()
+        pw = p.width() if p else 820
+        target_w = min(820, max(280, pw - 32))
+        return QSize(target_w, super().sizeHint().height())
+
     def _copy_text(self):
         cb = QApplication.clipboard()
         if cb:
@@ -252,7 +259,8 @@ class ResearchAnswerCard(QFrame):
             }}
         """)
         self.setObjectName("ResearchAnswerCard")
-        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        self.setMaximumWidth(820)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(16, 12, 16, 12)
@@ -434,6 +442,12 @@ class ResearchAnswerCard(QFrame):
         h = int(self._body.document().size().height())
         self._body.setFixedHeight(max(30, h + 8))
 
+    def sizeHint(self) -> QSize:
+        p = self.parentWidget()
+        pw = p.width() if p else 820
+        target_w = min(820, max(280, pw - 32))
+        return QSize(target_w, super().sizeHint().height())
+
     def _copy_text(self):
         cb = QApplication.clipboard()
         if cb:
@@ -570,8 +584,9 @@ class PerplexityWorkspace(QWidget):
         self._search_content = QWidget()
         self._search_content.setStyleSheet("background: transparent;")
         self._search_lay = QVBoxLayout(self._search_content)
-        self._search_lay.setContentsMargins(0, 0, 0, 0)
+        self._search_lay.setContentsMargins(16, 12, 16, 12)
         self._search_lay.setSpacing(12)
+        self._search_lay.setAlignment(Qt.AlignmentFlag.AlignHCenter)
 
         # Hero Welcome Section (Claude & Perplexity style)
         self._search_hero = QWidget()
@@ -644,8 +659,9 @@ class PerplexityWorkspace(QWidget):
         self._chat_content = QWidget()
         self._chat_content.setStyleSheet("background: transparent;")
         self._chat_lay = QVBoxLayout(self._chat_content)
-        self._chat_lay.setContentsMargins(0, 0, 0, 0)
+        self._chat_lay.setContentsMargins(16, 12, 16, 12)
         self._chat_lay.setSpacing(10)
+        self._chat_lay.setAlignment(Qt.AlignmentFlag.AlignHCenter)
 
         # Chat Hero Welcome (Claude & Perplexity style)
         self._chat_hero = QWidget()
@@ -758,7 +774,7 @@ class PerplexityWorkspace(QWidget):
 
         card = ChatMessageCard("YOU", text)
         target_lay = self._search_lay if self._active_mode == 0 else self._chat_lay
-        target_lay.insertWidget(target_lay.count() - 1, card)
+        target_lay.insertWidget(target_lay.count() - 1, card, alignment=Qt.AlignmentFlag.AlignHCenter)
         self._scroll_to_bottom()
 
     def add_assistant_message(self, text: str, is_research: bool = False):
@@ -776,7 +792,7 @@ class PerplexityWorkspace(QWidget):
             card.regenerate_clicked.connect(self.regenerate_requested.emit)
 
         target_lay = self._search_lay if self._active_mode == 0 else self._chat_lay
-        target_lay.insertWidget(target_lay.count() - 1, card)
+        target_lay.insertWidget(target_lay.count() - 1, card, alignment=Qt.AlignmentFlag.AlignHCenter)
         self._scroll_to_bottom()
 
     def clear_conversation(self):

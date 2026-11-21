@@ -120,27 +120,25 @@ class Reactor3D:
         p.save()
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # ── 1. Soft Ambient Starlight Glow (Subtle Nebula Core) ───────────────
-        glow_r = r * 1.35 * (1.0 + 0.15 * amp)
+        # ── 1. Soft Ambient Starlight Glow (Subtle Pure Monochrome Core) ──────
+        glow_r = r * 1.15 * (1.0 + 0.08 * amp)
         g = QRadialGradient(QPointF(cx, cy), glow_r)
-        g.setColorAt(0.00, _with_alpha(white, 0.09 + 0.10 * amp))
-        g.setColorAt(0.28, _with_alpha(main, 0.06 + 0.08 * amp))
-        g.setColorAt(0.65, _with_alpha(main, 0.02))
-        g.setColorAt(1.00, _with_alpha(main, 0.0))
+        g.setColorAt(0.00, _with_alpha(white, 0.05 + 0.04 * amp))
+        g.setColorAt(0.40, _with_alpha(white, 0.015))
+        g.setColorAt(1.00, _with_alpha(white, 0.0))
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(g))
         p.drawEllipse(QPointF(cx, cy), glow_r, glow_r)
 
         # ── 2. Fluid Harmonic Displacement of Points (Audio Reactivity) ───────
-        # Subtle organic breathing wave when idle
-        idle_wave = 0.024 * np.sin(2.4 * t + 3.2 * self._base_pts[1])
+        # Elegant organic breathing wave when idle
+        idle_wave = 0.015 * np.sin(2.0 * t + 2.5 * self._base_pts[1])
 
-        # Voice-driven spherical harmonic ripple waves
+        # Voice-driven spherical harmonic ripple waves (retaining spherical definition)
         if amp > 0.005:
-            harm1 = 0.16 * np.sin(5.0 * self._azimuth + 4.5 * t) * np.cos(4.0 * self._base_pts[1] - 2.5 * t)
-            harm2 = 0.09 * np.sin(8.0 * self._polar + 6.0 * t)
-            harm3 = 0.06 * np.cos(3.0 * self._azimuth - 7.0 * t)
-            audio_wave = amp * (harm1 + harm2 + harm3)
+            harm1 = 0.048 * np.sin(4.0 * self._azimuth + 3.5 * t) * np.cos(3.0 * self._base_pts[1] - 2.0 * t)
+            harm2 = 0.028 * np.sin(6.0 * self._polar + 4.5 * t)
+            audio_wave = amp * (harm1 + harm2)
         else:
             audio_wave = 0.0
 
@@ -175,22 +173,22 @@ class Reactor3D:
             # Normalized depth: 0.0 (far back) to 1.0 (nearest front)
             depth_k = max(0.0, min(1.0, (z_val + 1.0) * 0.5))
 
-            # Dot size: back points ~0.85px, front points ~2.4px
-            sz = (0.85 + 1.40 * depth_k) * float(sizes[i]) * float(s[order[i]])
+            # Dot size: back points ~0.95px, front points ~2.4px
+            sz = (0.95 + 1.30 * depth_k) * float(sizes[i]) * float(s[order[i]])
             if amp > 0.05:
-                sz *= (1.0 + 0.12 * amp)
+                sz *= (1.0 + 0.08 * amp)
 
-            # Opacity: back points soft (0.18), front points bright (0.95)
-            alpha = 0.18 + 0.78 * (depth_k ** 1.35) + 0.06 * float(twinkle[i])
-            alpha = max(0.12, min(1.0, alpha))
+            # Opacity: back points soft (0.16), front points bright (0.96)
+            alpha = 0.16 + 0.80 * (depth_k ** 1.35) + 0.05 * float(twinkle[i])
+            alpha = max(0.10, min(1.0, alpha))
 
-            # Color: front points are crisp pure white starlight with subtle accent fringe
-            if depth_k > 0.65:
+            # Color: Pure monochrome starlight white / silver (Perplexity Voice official look)
+            if depth_k > 0.55:
                 pt_col = _with_alpha(white, alpha)
-            elif depth_k > 0.35:
-                pt_col = _with_alpha(white if (i % 3 != 0) else main, alpha)
+            elif depth_k > 0.25:
+                pt_col = _with_alpha(QColor("#EDEDED"), alpha * 0.90)
             else:
-                pt_col = _with_alpha(main if (i % 2 == 0) else white, alpha * 0.85)
+                pt_col = _with_alpha(QColor("#C0C0C0"), alpha * 0.75)
 
             px = float(X_s[i])
             py = float(Y_s[i])
@@ -205,11 +203,11 @@ class Reactor3D:
 
         for i in range(len(m_Z)):
             d_k = max(0.0, min(1.0, (float(m_Z[i]) + 1.0) * 0.5))
-            m_sz = 1.0 + 1.2 * d_k
-            m_alpha = 0.20 + 0.55 * d_k
+            m_sz = 1.0 + 1.1 * d_k
+            m_alpha = 0.18 + 0.45 * d_k
             p.fillRect(
                 QRectF(float(m_X[i]) - m_sz * 0.5, float(m_Y[i]) - m_sz * 0.5, m_sz, m_sz),
-                _with_alpha(white if i % 2 == 0 else main, m_alpha),
+                _with_alpha(white, m_alpha),
             )
 
         p.restore()

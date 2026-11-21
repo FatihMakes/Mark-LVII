@@ -420,6 +420,8 @@ class MainWindow(QMainWindow):
         self._composer.file_cleared.connect(self._on_composer_file_cleared)
         self._composer.mic_toggled.connect(self._toggle_mute)
         self._composer.interrupt_called.connect(self._do_interrupt)
+        self.hud.interrupt_clicked.connect(self._do_interrupt)
+        self.hud.mic_clicked.connect(self._toggle_mute)
 
         # Quick-access drawer (floating overlay, built after central widget layout is done)
         self._quick_drawer = self._build_quick_drawer()
