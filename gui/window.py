@@ -405,9 +405,13 @@ class MainWindow(QMainWindow):
 
         # Wire Perplexity Workspace
         self._workspace.prompt_selected.connect(self._on_prompt_selected)
-        self._workspace.mode_changed.connect(self._sidebar.set_active_mode)
+        self._workspace.mode_changed.connect(self._on_sidebar_mode)
         self._workspace.engine_clicked.connect(self._open_providers)
         self._workspace.context_panel_toggled.connect(self._toggle_context_panel)
+        self._workspace.regenerate_requested.connect(self._on_regenerate_requested)
+
+        # Wire Context Panel actions
+        self._context_panel.follow_up_clicked.connect(self._on_prompt_selected)
 
         # Wire Universal Composer
         self._composer.submitted.connect(self._send_text)
@@ -2071,13 +2075,17 @@ class MainWindow(QMainWindow):
         self._content_display.moveCursor(
             self._content_display.textCursor().MoveOperation.Start
         )
-        self._reveal_below_hud(self._content_panel, 260)
+        if hasattr(self, "_workspace") and self._workspace.get_mode() == 2:
+            # Voice HUD mode: keep the 3D reactor unencumbered and prominent
+            pass
+        else:
+            self._reveal_below_hud(self._content_panel, 260)
 
         # Mirror rich answer in Perplexity central workspace and extract citations into right panel
         if hasattr(self, "_context_panel"):
             self._context_panel.parse_and_display_sources_from_text(text)
         if hasattr(self, "_workspace"):
-            self._workspace.add_assistant_message(f"### {title}\n\n{text}")
+            self._workspace.add_assistant_message(f"### {title}\n\n{text}", is_research=True)
 
     # ── the coding agent, live ───────────────────────────────────────────────
     # The panel under the head shows a coding job while it runs: what was asked,
@@ -2478,6 +2486,8 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_composer") and self._composer.get_attached_file() != path:
             self._composer.set_attached_file(path)
         p    = Path(path)
+        if hasattr(self, "_context_panel"):
+            self._context_panel.set_attached_file(p.name)
         cat  = _file_category(p)
         icon, _ = _FILE_ICONS.get(cat, _FILE_ICONS["unknown"])
         if cat == "folder":
@@ -3134,10 +3144,31 @@ class MainWindow(QMainWindow):
                 self._workspace.add_assistant_message(msg)
 
     def _on_sidebar_mode(self, idx: int):
-        if hasattr(self, "_workspace"):
-            self._workspace.set_mode(idx)
-        if idx == 2 and hasattr(self, "hud"):
-            self.hud.update()
+        if getattr(self, "_mode_switching", False):
+            return
+        self._mode_switching = True
+        try:
+            if hasattr(self, "_workspace") and self._workspace.get_mode() != idx:
+                self._workspace.set_mode(idx)
+            if hasattr(self, "_sidebar"):
+                self._sidebar.set_active_mode(idx)
+            if hasattr(self, "_context_panel"):
+                self._context_panel.on_workspace_mode_changed(idx)
+            if idx == 2:
+                # Voice HUD mode: Hide the content drawer so reactor takes 100% full vertical space!
+                if hasattr(self, "_content_panel"):
+                    self._content_panel.hide()
+                if hasattr(self, "_center_split"):
+                    self._center_split.setSizes([self._center_split.height() or 800, 0])
+                if hasattr(self, "hud"):
+                    self.hud.update()
+        finally:
+            self._mode_switching = False
+
+    def _on_regenerate_requested(self):
+        query = getattr(self._workspace, "_last_user_query", "").strip()
+        if query:
+            self._send_text(query)
 
     def _on_prompt_selected(self, text: str):
         if hasattr(self, "_composer"):
@@ -3164,6 +3195,8 @@ class MainWindow(QMainWindow):
             self._file_hint.setText("No file loaded")
         if hasattr(self, "_drop_zone"):
             self._drop_zone.clear()
+        if hasattr(self, "_context_panel"):
+            self._context_panel.set_attached_file(None)
 
     def _on_sidebar_action(self, action: str):
         if action == "settings":
@@ -3189,15 +3222,24 @@ class MainWindow(QMainWindow):
             self._open_remote()
 
     def _apply_state(self, state: str):
+        state = str(state or "").upper()
+        if self._muted and state not in ("MUTED", "DISCONNECTED", "ERROR"):
+            # Enforce mute lock
+            state = "MUTED"
+
         self.hud.state    = state
         self.hud.speaking = (state == "SPEAKING")
         if hasattr(self, "_state_chip"):
             self._state_chip.set_state(state)
         if hasattr(self, "_composer"):
             self._composer.set_speaking(state == "SPEAKING")
+            self._composer.set_state(state)
         if hasattr(self, "_workspace"):
             mode_lbl = getattr(self, "_engine_label", "GEMINI LIVE")
             self._workspace.set_engine_label(mode_lbl)
+            self._workspace.set_state(state)
+        if hasattr(self, "_context_panel"):
+            self._context_panel.set_voice_state(state)
 
     def _check_config(self) -> bool:
         d = _read_full_config()

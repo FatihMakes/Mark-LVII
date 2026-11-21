@@ -323,6 +323,11 @@ class PerplexityComposer(QWidget):
         self._is_speaking = speaking
         self._interrupt_btn.setVisible(speaking)
 
+    def set_state(self, state: str):
+        state = str(state or "").upper()
+        is_active = state in ("SPEAKING", "THINKING", "PROCESSING")
+        self._interrupt_btn.setVisible(is_active)
+
     def set_muted(self, muted: bool):
         self._is_muted = muted
         self._update_mic_style()

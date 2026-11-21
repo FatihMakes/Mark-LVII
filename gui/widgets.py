@@ -311,6 +311,11 @@ class FileDropZone(QWidget):
         self._canvas = _DropCanvas(self)
         layout.addWidget(self._canvas)
 
+    def clear(self):
+        self._current_file = None
+        self._folder_files = 0
+        self._canvas.update()
+
     def _animate(self):
         # The marching-ants dashed border is only meaningful while the user is
         # hovering or dragging a file over the zone. When idle, skip the repaint
@@ -995,8 +1000,12 @@ class ArcLogo(QWidget):
 class StateChip(QWidget):
     """What the assistant is doing, in the middle of the header."""
 
-    _COLOURS = {"LISTENING": "GREEN", "SPEAKING": "ACC", "THINKING": "ACC2",
-                "PROCESSING": "ACC2", "MUTED": "MUTED_C"}
+    _COLOURS = {
+        "LISTENING": "GREEN", "SPEAKING": "ACC", "THINKING": "ACC2",
+        "PROCESSING": "ACC2", "MUTED": "MUTED_C", "SLEEPING": "TEXT_DIM",
+        "STANDBY": "TEXT_DIM", "DISCONNECTED": "RED", "ERROR": "RED",
+        "INITIALISING": "PRI"
+    }
 
     def __init__(self, parent=None):
         super().__init__(parent)
