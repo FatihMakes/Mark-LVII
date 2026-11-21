@@ -1274,7 +1274,7 @@ class MainWindow(QMainWindow):
                 from actions.document_studio import extract_document_text
                 txt = extract_document_text(str(p))
                 if txt and not txt.startswith("Error") and not txt.startswith("File not found"):
-                    preview = txt[:2500] + ("\n...[content truncated]" if len(txt) > 2500 else "")
+                    preview = txt[:3500] + ("\n...[content truncated for preview; full text indexed]" if len(txt) > 3500 else "")
                     report = (
                         f"# 📄 Document Uploaded: `{p.name}`\n"
                         f"**Path:** `{p}`  \n"
@@ -1282,19 +1282,23 @@ class MainWindow(QMainWindow):
                         f"### Content Preview:\n"
                         f"```\n{preview}\n```\n\n"
                         f"---\n"
-                        f"*Ready for deep summarization, question answering, rewriting, or editing.*"
+                        f"*Ready for ChatGPT & Claude grade deep analysis, problem solving, question answering, or editing.*"
                     )
                     self._content_sig.emit(f"Document: {p.name}", report)
                     if hasattr(self, 'on_text_command') and callable(self.on_text_command):
-                        self.on_text_command(f"SYS_CONTEXT: The user uploaded document '{p.name}' at '{p}'. Content:\n{txt[:2500]}")
+                        self.on_text_command(
+                            f"SYS_CONTEXT: The user uploaded document '{p.name}' at '{p}' ({len(txt)} characters). "
+                            f"For complete step-by-step problem solving, calculations, or deep analysis, use document_studio(action='solve' or 'analyze', file_path='{p}', query=...) "
+                            f"or file_processor(path='{p}', action='solve', instruction=...). Document text snippet:\n{txt[:12000]}"
+                        )
                 else:
                     self._content_sig.emit(f"File: {p.name}", f"**Location:** `{p}`\n\nIndexed and ready for processing.")
                     if hasattr(self, 'on_text_command') and callable(self.on_text_command):
-                        self.on_text_command(f"SYS_CONTEXT: The user uploaded file '{p.name}' at '{p}'. Ready for processing with file_processor.")
+                        self.on_text_command(f"SYS_CONTEXT: The user uploaded file '{p.name}' at '{p}'. Ready for processing with document_studio or file_processor.")
             except Exception:
                 self._content_sig.emit(f"File: {p.name}", f"**Location:** `{p}`\n\nReady for processing.")
                 if hasattr(self, 'on_text_command') and callable(self.on_text_command):
-                    self.on_text_command(f"SYS_CONTEXT: The user uploaded file '{p.name}' at '{p}'. Ready for processing with file_processor.")
+                    self.on_text_command(f"SYS_CONTEXT: The user uploaded file '{p.name}' at '{p}'. Ready for processing with document_studio or file_processor.")
 
     def _update_metrics(self):
         snap = _metrics.snapshot()
