@@ -140,6 +140,30 @@ def _ddg_search(query: str, max_results: int = 6) -> list[dict]:
                 })
     except Exception as e:
         print(f"[WebSearch] ⚠️ DDG text() failed: {e}")
+
+    # Fallback to direct HTML scrape if DDGS returned nothing
+    if not results:
+        try:
+            import requests
+            from bs4 import BeautifulSoup
+            headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+            resp = requests.post("https://html.duckduckgo.com/html/", data={"q": query}, headers=headers, timeout=8)
+            soup = BeautifulSoup(resp.text, "html.parser")
+            for div in soup.select(".web-result"):
+                t = div.select_one(".result__title")
+                s = div.select_one(".result__snippet")
+                u = div.select_one(".result__url")
+                if t and s:
+                    results.append({
+                        "title": t.get_text(strip=True),
+                        "snippet": s.get_text(strip=True),
+                        "url": u.get_text(strip=True) if u else "",
+                    })
+                    if len(results) >= max_results:
+                        break
+        except Exception as e:
+            print(f"[WebSearch] ⚠️ HTML scrape fallback failed: {e}")
+
     return results
 
 
@@ -162,6 +186,24 @@ def _ddg_news(query: str, max_results: int = 8) -> list[dict]:
     # instead of raising.
     if not results:
         results = _ddg_search(query, max_results=max_results)
+
+    # Secondary fallback to Google News RSS if search returned nothing
+    if not results:
+        try:
+            import requests
+            import xml.etree.ElementTree as ET
+            import urllib.parse
+            rss_url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=en-US&gl=US&ceid=US:en" if query else "https://news.google.com/rss"
+            r = requests.get(rss_url, timeout=5)
+            if r.status_code == 200:
+                root = ET.fromstring(r.content)
+                for item in root.findall(".//item")[:max_results]:
+                    title = item.find("title").text if item.find("title") is not None else ""
+                    link = item.find("link").text if item.find("link") is not None else ""
+                    results.append({"title": title, "snippet": title, "url": link, "source": "Google News"})
+        except Exception as e:
+            print(f"[WebSearch] ⚠️ RSS news fallback failed: {e}")
+
     return results
 
 
@@ -169,11 +211,17 @@ def _format_ddg(query: str, results: list[dict]) -> str:
     if not results:
         return f"No results found for: {query}"
 
-    lines = [f"Search results for: {query}\n"]
+    lines = [f"### Search results for: {query}\n"]
     for i, r in enumerate(results, 1):
-        if r.get("title"):   lines.append(f"{i}. {r['title']}")
-        if r.get("snippet"): lines.append(f"   {r['snippet']}")
-        if r.get("url"):     lines.append(f"   Source: {r['url']}")
+        title = r.get("title") or "Source Link"
+        url = r.get("url") or ""
+        snippet = r.get("snippet") or ""
+        if url:
+            lines.append(f"{i}. **[{title}]({url})**")
+        else:
+            lines.append(f"{i}. **{title}**")
+        if snippet:
+            lines.append(f"   {snippet}")
         lines.append("")
     return "\n".join(lines).strip()
 
@@ -182,17 +230,20 @@ def _format_news(query: str, results: list[dict]) -> str:
     if not results:
         return f"No news found for: {query}"
 
-    lines = [f"Latest news: {query}\n"]
+    lines = [f"### Latest news: {query}\n"]
     for i, r in enumerate(results, 1):
         title = r.get("title", "")
         if not title:
             continue
-        src = f"  [{r['source']}]" if r.get("source") else ""
-        lines.append(f"{i}. {title}{src}")
-        if r.get("snippet"):
-            lines.append(f"   {r['snippet'][:140]}")
-        if r.get("url"):
-            lines.append(f"   {r['url']}")
+        src = f" • *{r['source']}*" if r.get("source") else ""
+        url = r.get("url", "")
+        snippet = (r.get("snippet") or "")[:180]
+        if url:
+            lines.append(f"{i}. **[{title}]({url})**{src}")
+        else:
+            lines.append(f"{i}. **{title}**{src}")
+        if snippet and snippet != title:
+            lines.append(f"   {snippet}")
         lines.append("")
     return "\n".join(lines).strip()
 

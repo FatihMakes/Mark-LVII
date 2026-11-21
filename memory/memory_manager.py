@@ -321,6 +321,18 @@ def format_memory_for_prompt(memory: dict | None) -> str:
                        + (f" (+{len(indexed) - len(names)} more)"
                           if len(indexed) > len(names) else ""))
 
+    # 4. Permanently learned user rules, instructions & facts (persist across restarts)
+    try:
+        learned_rules_file = Path(__file__).resolve().parent / "learned_rules.md"
+        if learned_rules_file.exists():
+            rules_content = learned_rules_file.read_text(encoding="utf-8").strip()
+            if rules_content:
+                out.append("")
+                out.append("[PERMANENTLY LEARNED RULES & INSTRUCTIONS — active across every restart]")
+                out.append(rules_content)
+    except Exception:
+        pass
+
     return "\n".join(out) + "\n"
 
 

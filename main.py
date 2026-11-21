@@ -53,6 +53,7 @@ import traceback
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
+from collections import deque
 
 import sounddevice as sd
 import numpy as np
@@ -96,6 +97,7 @@ from core.viseme               import VisemeStream
 from core.wake_word            import (
     WakeWordDetector, is_ready as wake_is_ready, install_and_download as wake_install,
 )
+from core                      import voice_verifier
 
 # How long the assistant stays awake with no user speech before it auto-sleeps
 # again (wake-word mode only).
@@ -335,8 +337,15 @@ def _render_prompt(template: str, values: dict) -> str:
 
 
 def _get_api_key() -> str:
-    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
+    from core import gemini
+    key = gemini.api_key()
+    if key:
+        return key
+    try:
+        with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f).get("gemini_api_key", "")
+    except Exception:
+        return ""
 
 
 def _gemini_usable() -> bool:
@@ -376,6 +385,23 @@ def _is_repeat_chunk(txt: str, buf: list) -> bool:
         return bool(buf) and txt == buf[-1]
     joined = " ".join(buf)
     return txt in joined
+
+def _join_transcript_tokens(tokens: list[str]) -> str:
+    res = ""
+    for t in tokens:
+        if not t:
+            continue
+        t = t.strip()
+        if not t:
+            continue
+        if not res:
+            res = t
+        elif any("\u0900" <= c <= "\u097F" for c in t) and any("\u0900" <= c <= "\u097F" for c in res[-1]):
+            res += t
+        else:
+            res += " " + t
+    return res.strip()
+
 
 def _clean_transcript(text: str) -> str:    
     text = _CTRL_RE.sub("", text)
@@ -626,6 +652,8 @@ class JarvisLive:
         # loop as words arrive, drained by the playback loop against the audio.
         self._visemes              = VisemeStream()
         self._last_out_logged      = ""      # de-dupes a re-sent transcript tail
+        self._last_user_logged     = ""      # de-dupes user speech display
+        self._user_in_accumulator  = ""      # aggregates partial syllables / fragments
         # Push-to-talk
         self._ptt_enabled          = False
         self._ptt_held             = False
@@ -756,6 +784,7 @@ class JarvisLive:
         self._awake            = not self._wake_enabled
         self._wake_detector: WakeWordDetector | None = None
         self._wake_sleep_timeout = WAKE_SLEEP_TIMEOUT
+        self._voice_match_buf    = deque(maxlen=16)
 
         # Restore the saved push-to-talk preference. Doing it here rather than
         # in __init__ means the hotkey thread only exists once there is a
@@ -1823,13 +1852,6 @@ class JarvisLive:
             # that a cough or a keystroke cannot trigger it.
             if jarvis_speaking:
                 # Nothing is streamed while JARVIS talks.
-                #
-                # Interrupting by voice used to live here: `EchoGuard` can pick a
-                # user out from under our own echo, and `core/echo.py` still does
-                # that for the tail below. Re-enabling is small — classify each
-                # block here and call interrupt() after `required_blocks` of
-                # agreement — but it depends on the listener's room, so it stays
-                # out until it can be tried on real hardware.
                 return
 
             # ── Echo tail ────────────────────────────────────────────────────
@@ -1855,7 +1877,24 @@ class JarvisLive:
             # unless you are holding the key.
             if self._ptt_enabled and not self._ptt_held:
                 return
-            
+
+            # ── Voice Match / Speaker Verification gate ─────────────────────
+            # When Voice Match is enabled and calibrated, verify speech over a stable window
+            # without dropping individual micro-frames.
+            if voice_verifier.is_voice_match_enabled():
+                try:
+                    lvl = _pcm_level(indata)
+                    if lvl > 0.05:
+                        self._voice_match_buf.append(indata.copy())
+                        if len(self._voice_match_buf) >= 8:
+                            full_speech = np.concatenate(list(self._voice_match_buf))
+                            match, score, _ = voice_verifier.verify_speaker(full_speech, SEND_SAMPLE_RATE)
+                            self._voice_match_buf.popleft()
+                            if not match and score < 0.40:
+                                return
+                except Exception:
+                    pass
+
             if not self.ui.muted and not self._phone_active:
                 data = indata.tobytes()
                 loop.call_soon_threadsafe(
@@ -2019,6 +2058,7 @@ class JarvisLive:
                             if txt:
                                 in_buf.append(txt)
                                 self._last_user_speech = time.monotonic()
+                                self.ui.set_state("THINKING")
 
                         if sc.turn_complete:
                             if self._turn_done_event:
@@ -2033,9 +2073,18 @@ class JarvisLive:
                                 self._visemes.reset()
                                 continue
 
-                            full_in = " ".join(in_buf).strip()
-                            if full_in:
+                            raw_in = _join_transcript_tokens(in_buf)
+                            if raw_in:
+                                if len(raw_in.strip()) <= 2:
+                                    self._user_in_accumulator = (self._user_in_accumulator + " " + raw_in).strip()
+                                else:
+                                    self._user_in_accumulator = raw_in
+
+                            full_in = self._user_in_accumulator.strip()
+                            if full_in and len(full_in) > 2 and full_in != self._last_user_logged:
+                                self._last_user_logged = full_in
                                 self._last_out_logged = ""   # new exchange
+                                self._user_in_accumulator = ""
                                 self.ui.write_log(f"You: {full_in}")
                                 self._session_log.append(f"User: {full_in}")
                                 if self._dashboard:
@@ -2750,16 +2799,11 @@ class JarvisLive:
                 # below behaves any differently.
                 self._engine_caps = self._resolve_engine_caps()
                 if self._engine_caps is None and not _gemini_usable():
-                    # Nothing can hold the conversation: Gemini has no key (or the
-                    # user chose not to use it) and no local engine is set up.
-                    # Connecting anyway failed with a bare KeyError every few
-                    # seconds and told nobody anything.
                     if not getattr(self, "_no_engine_said", False):
                         self._no_engine_said = True
                         self.ui.write_log(
-                            "SYS: No Gemini key and no local engine set up yet — open ⚙ → "
-                            "ENGINE & PROVIDERS and choose MY OWN SETUP, or add a Gemini key.")
-                    self.ui.set_state("SLEEPING")
+                            "SYS: Gemini API key required — add your free key in config/api_keys.json or Settings (⚙).")
+                    self.ui.set_state("STANDBY")
                     await asyncio.sleep(5)
                     continue
                 self._no_engine_said = False
@@ -2840,7 +2884,7 @@ class JarvisLive:
                     else:
                         self._awake = True
                         self.ui.set_state("LISTENING")
-                        self.ui.write_log("SYS: JARVIS online.")
+                        self.ui.write_log("SYS: JARVIS Mark-LVII Enterprise online. Contributed by Aman Kumar (@iamTechieAman).")
 
                     # What this machine will not permit, said once, on screen.
                     #
@@ -2987,8 +3031,23 @@ class JarvisLive:
                     )
                     continue
 
-                # Invalid API key — stop hammering the API, prompt re-configuration
+                # Quota exhaustion / 429 — rotate keys if alternatives exist
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "quota" in err_str.lower():
+                    if _gemini.has_alternative_keys():
+                        next_k = _gemini.rotate_api_key(reason="live_quota")
+                        self.ui.write_log(f"SYS: Gemini quota reached — rotated to key #{_gemini.get_key_index() + 1}.")
+                        self._conn_backoff = 1
+                        continue
+                    else:
+                        self.ui.write_log("SYS: Gemini free quota limit reached. Add backup keys in config/api_keys.json under 'gemini_api_keys' or switch to Ollama in Settings.")
+
+                # Invalid API key — rotate if backup keys exist, else prompt re-configuration
                 if "API key not valid" in err_str or "1007" in err_str:
+                    if _gemini.has_alternative_keys():
+                        next_k = _gemini.rotate_api_key(reason="key_invalid")
+                        self.ui.write_log(f"SYS: Gemini key refused — rotated to key #{_gemini.get_key_index() + 1}.")
+                        self._conn_backoff = 1
+                        continue
                     self.ui.write_log("ERR: API key invalid — please re-enter your key.")
                     self.ui.set_state("SLEEPING")
                     self.ui.prompt_reconfig()
