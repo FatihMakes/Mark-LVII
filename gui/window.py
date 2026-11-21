@@ -2000,7 +2000,10 @@ class MainWindow(QMainWindow):
                 self._wake_state()
             except Exception:
                 pass
-            self._wake_btns_sig.emit()
+            try:
+                self._wake_btns_sig.emit()
+            except Exception:
+                pass
         threading.Thread(target=work, daemon=True, name="wake-state-warm").start()
 
     def _toggle_drawer(self, checked: bool):

@@ -109,6 +109,7 @@ class C:
     ACTIVE    = "#202020"      # Active / selected surfaces: #202020
     BORDER    = "#303030"      # Standard visible borders: #303030
     BORDER_B  = "#555555"      # Interactive control borders: #555555
+    BORDER_CTRL = "#555555"    # Alias for interactive control borders
     BORDER_A  = "#404040"      # Focus / active borders: #404040
     PRI       = "#22D3EE"      # Restrained cyan accent: #22D3EE
     PRI_DIM   = "#0E7490"      # Deep cyan: #0E7490

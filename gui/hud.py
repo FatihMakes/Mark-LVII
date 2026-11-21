@@ -636,7 +636,7 @@ class HudCanvas(QWidget):
             # [✕] button
             is_intr_hover = self._hovered_btn == "interrupt"
             p.setBrush(QBrush(qcol(C.HOVER if is_intr_hover else C.ACTIVE)))
-            p.setPen(QPen(qcol(C.BORDER_CTRL if is_intr_hover else C.BORDER), 1))
+            p.setPen(QPen(qcol(C.BORDER_B if is_intr_hover else C.BORDER), 1))
             p.drawEllipse(QPointF(cx - gap / 2.0, btn_y), btn_r, btn_r)
             p.setFont(px_font(12, QFont.Weight.Bold))
             p.setPen(QPen(qcol(C.WHITE if is_intr_hover else C.TEXT_DIM)))
@@ -645,7 +645,7 @@ class HudCanvas(QWidget):
             # [🎤] button
             is_mic_hover = self._hovered_btn == "mic"
             p.setBrush(QBrush(qcol(C.HOVER if is_mic_hover else C.ACTIVE)))
-            p.setPen(QPen(qcol(C.BORDER_CTRL if is_mic_hover else C.BORDER), 1))
+            p.setPen(QPen(qcol(C.BORDER_B if is_mic_hover else C.BORDER), 1))
             p.drawEllipse(QPointF(cx + gap / 2.0, btn_y), btn_r, btn_r)
             mic_c = qcol(C.GREEN) if (self.state == "LISTENING" and not self.muted) else (qcol(C.MUTED_C) if self.muted else qcol(C.WHITE if is_mic_hover else C.TEXT_DIM))
             p.setFont(px_font(12, QFont.Weight.Bold))
@@ -708,7 +708,7 @@ class HudCanvas(QWidget):
 
         is_intr_hover = self._hovered_btn == "interrupt"
         p.setBrush(QBrush(qcol(C.HOVER if is_intr_hover else C.ACTIVE)))
-        p.setPen(QPen(qcol(C.BORDER_CTRL if is_intr_hover else C.BORDER), 1))
+        p.setPen(QPen(qcol(C.BORDER_B if is_intr_hover else C.BORDER), 1))
         p.drawEllipse(QPointF(cx - gap / 2.0, btn_y), btn_r, btn_r)
         p.setFont(px_font(11, QFont.Weight.Bold))
         p.setPen(QPen(qcol(C.WHITE if is_intr_hover else C.TEXT_DIM)))
@@ -716,7 +716,7 @@ class HudCanvas(QWidget):
 
         is_mic_hover = self._hovered_btn == "mic"
         p.setBrush(QBrush(qcol(C.HOVER if is_mic_hover else C.ACTIVE)))
-        p.setPen(QPen(qcol(C.BORDER_CTRL if is_mic_hover else C.BORDER), 1))
+        p.setPen(QPen(qcol(C.BORDER_B if is_mic_hover else C.BORDER), 1))
         p.drawEllipse(QPointF(cx + gap / 2.0, btn_y), btn_r, btn_r)
         mic_c = qcol(C.GREEN) if (self.state == "LISTENING" and not self.muted) else (qcol(C.MUTED_C) if self.muted else qcol(C.WHITE if is_mic_hover else C.TEXT_DIM))
         p.setFont(px_font(11, QFont.Weight.Bold))
