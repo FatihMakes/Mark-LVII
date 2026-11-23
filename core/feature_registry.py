@@ -338,6 +338,9 @@ class FeatureRegistry:
     def all_features(self) -> List[FeatureRecord]:
         return list(self._features.values())
 
+    def get_all_features(self) -> List[FeatureRecord]:
+        return list(self._features.values())
+
     def get_summary(self) -> Dict[str, Any]:
         total = len(self._features)
         operational = len([f for f in self._features.values() if f.actual_status == "OPERATIONAL"])
