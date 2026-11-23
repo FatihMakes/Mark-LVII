@@ -1977,3 +1977,417 @@ class RemoteKeyOverlay(QWidget):
         self.closed.emit()
 
 
+class IdentityAuthOverlay(_HudOverlay):
+    """Owner Identity, Multi-Layer Biometrics & Permissions Management Overlay."""
+
+    closed = pyqtSignal()
+    _OW = 540
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(f"""
+            IdentityAuthOverlay {{
+                background: rgba(10, 12, 16, 252);
+                border: 1px solid {C.BORDER};
+                border-radius: 8px;
+            }}
+        """)
+        self.setFixedWidth(self._OW)
+        self._lay = QVBoxLayout(self)
+        self._lay.setContentsMargins(20, 16, 20, 16)
+        self._lay.setSpacing(10)
+        self._rebuild()
+
+    def _clear_layout(self):
+        while self._lay.count():
+            item = self._lay.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.hide()
+                w.deleteLater()
+                continue
+            sub = item.layout()
+            if sub is not None:
+                while sub.count():
+                    si = sub.takeAt(0)
+                    sw = si.widget()
+                    if sw is not None:
+                        sw.hide()
+                        sw.deleteLater()
+                sub.deleteLater()
+
+    def _rebuild(self):
+        self._clear_layout()
+        try:
+            from core.identity_engine import get_owner_profile, get_hardware_device_token
+            from core.permissions import list_authorized_users, get_current_speaker
+        except Exception:
+            get_owner_profile = lambda: {}
+            get_hardware_device_token = lambda: "UNKNOWN"
+            list_authorized_users = lambda: []
+            get_current_speaker = lambda: "UNKNOWN"
+
+        prof = get_owner_profile()
+        hw_token = get_hardware_device_token()
+        auth_users = list_authorized_users()
+        curr_speaker = get_current_speaker()
+        is_enrolled = prof.get("enrolled", False)
+        owner_name = prof.get("owner_name", "Primary Owner")
+
+        # Top Bar
+        top_row = QHBoxLayout()
+        hdr = QLabel("🛡️  OWNER IDENTITY & ACCESS CONTROL")
+        hdr.setFont(hud_font(12, QFont.Weight.Bold))
+        hdr.setStyleSheet(f"color: {C.PRI}; background: transparent; letter-spacing: 1px;")
+        top_row.addWidget(hdr)
+        top_row.addStretch()
+
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(22, 22)
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setStyleSheet(f"background: transparent; color: {C.TEXT_DIM}; border: none; font-size: 13px;")
+        close_btn.clicked.connect(self._do_close)
+        top_row.addWidget(close_btn)
+        self._lay.addLayout(top_row)
+
+        sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
+        self._lay.addWidget(sep)
+
+        # Owner Status Card
+        card = QFrame()
+        card.setStyleSheet(f"background: {C.PANEL2}; border: 1px solid {C.BORDER}; border-radius: 6px; padding: 10px;")
+        card_lay = QVBoxLayout(card)
+        card_lay.setContentsMargins(10, 8, 10, 8)
+        card_lay.setSpacing(4)
+
+        status_badge = "🟢 ENROLLED & ACTIVE" if is_enrolled else "🟠 CALIBRATION PENDING"
+        badge_col = C.GREEN if is_enrolled else "#F59E0B"
+        
+        row1 = QHBoxLayout()
+        o_lbl = QLabel(f"Owner: {owner_name}")
+        o_lbl.setFont(px_font(12, QFont.Weight.Bold))
+        o_lbl.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
+        row1.addWidget(o_lbl)
+        row1.addStretch()
+        b_lbl = QLabel(status_badge)
+        b_lbl.setFont(px_font(10, QFont.Weight.Bold, mono=True))
+        b_lbl.setStyleSheet(f"color: {badge_col}; background: transparent;")
+        row1.addWidget(b_lbl)
+        card_lay.addLayout(row1)
+
+        samples_cnt = len(prof.get("calibration_samples", []))
+        det_lbl = QLabel(f"• Biometric Samples: {samples_cnt} / 3 enrolled\n• Hardware Token: {hw_token[:16]}... (Apple Silicon Locked)\n• Anti-Replay Liveness: Active (Vocal Micro-Tremor + Phonetic Challenge)")
+        det_lbl.setFont(px_font(9.5, mono=True))
+        det_lbl.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent; line-height: 1.4;")
+        card_lay.addWidget(det_lbl)
+        self._lay.addWidget(card)
+
+        # Active Session Security
+        sess_box = QFrame()
+        sess_box.setStyleSheet(f"background: {C.PANEL}; border: 1px solid {C.BORDER}; border-radius: 6px; padding: 6px;")
+        sess_lay = QVBoxLayout(sess_box)
+        sess_lay.setContentsMargins(8, 6, 8, 6)
+        sess_lay.setSpacing(3)
+
+        s_row = QHBoxLayout()
+        s_title = QLabel(f"Current Turn Speaker: {curr_speaker}")
+        s_title.setFont(px_font(10, QFont.Weight.Bold))
+        s_title.setStyleSheet(f"color: {C.PRI if curr_speaker == 'OWNER' else C.TEXT}; background: transparent;")
+        s_row.addWidget(s_title)
+        s_row.addStretch()
+        sess_lay.addLayout(s_row)
+
+        rule_desc = "Session Mode: Full Autonomous Access (Owner)" if curr_speaker == "OWNER" else "Session Mode: Scoped Guest Access (Private memory shielded, dangerous tools blocked)"
+        r_lbl = QLabel(rule_desc)
+        r_lbl.setFont(px_font(9))
+        r_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
+        sess_lay.addWidget(r_lbl)
+        self._lay.addWidget(sess_box)
+
+        # Authorized Users Section
+        auth_hdr = QLabel(f"AUTHORIZED USERS ({len(auth_users)})")
+        auth_hdr.setFont(px_font(9.5, QFont.Weight.Bold))
+        auth_hdr.setStyleSheet(f"color: {C.PRI}; background: transparent; letter-spacing: 0.5px;")
+        self._lay.addWidget(auth_hdr)
+
+        auth_scroll = QScrollArea()
+        auth_scroll.setWidgetResizable(True)
+        auth_scroll.setFixedHeight(90)
+        auth_scroll.setStyleSheet(f"QScrollArea {{ background: transparent; border: 1px solid {C.BORDER}; border-radius: 4px; }}")
+        auth_inner = QWidget()
+        auth_inner.setStyleSheet("background: transparent;")
+        auth_in_lay = QVBoxLayout(auth_inner)
+        auth_in_lay.setContentsMargins(6, 4, 6, 4)
+        auth_in_lay.setSpacing(3)
+
+        if auth_users:
+            for u in auth_users:
+                u_row = QLabel(f"• {u.get('name', 'User')} — Role: {u.get('role', 'GUEST')} (Tier: {u.get('tier', 'PUBLIC')})")
+                u_row.setFont(px_font(9, mono=True))
+                u_row.setStyleSheet(f"color: {C.TEXT}; background: transparent;")
+                auth_in_lay.addWidget(u_row)
+        else:
+            no_u = QLabel("No auxiliary guests registered. Owner-only operation active.")
+            no_u.setFont(px_font(9))
+            no_u.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
+            auth_in_lay.addWidget(no_u)
+        auth_in_lay.addStretch()
+        auth_scroll.setWidget(auth_inner)
+        self._lay.addWidget(auth_scroll)
+
+        # Bottom Buttons
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+
+        audit_btn = QPushButton("📋 View Audit Log")
+        audit_btn.setFont(px_font(10, QFont.Weight.Bold))
+        audit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        audit_btn.setStyleSheet(f"background: {C.PANEL}; color: {C.PRI}; border: 1px solid {C.BORDER}; border-radius: 4px; padding: 5px 12px;")
+        audit_btn.clicked.connect(self._show_audit_log)
+        btn_row.addWidget(audit_btn)
+
+        btn_row.addStretch()
+
+        done_btn = QPushButton("Done")
+        done_btn.setFont(px_font(10, QFont.Weight.Bold))
+        done_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        done_btn.setStyleSheet(f"background: {C.PRI}; color: {C.WHITE}; border: none; border-radius: 4px; padding: 5px 16px;")
+        done_btn.clicked.connect(self._do_close)
+        btn_row.addWidget(done_btn)
+        self._lay.addLayout(btn_row)
+
+    def _show_audit_log(self):
+        log_path = Path(__file__).resolve().parent.parent / "memory" / "permission_audit.jsonl"
+        content = "No audit log entries recorded yet."
+        if log_path.is_file():
+            try:
+                lines = log_path.read_text(encoding="utf-8").strip().splitlines()
+                if lines:
+                    recent = lines[-12:]
+                    content = "\n".join(recent)
+            except Exception as e:
+                content = f"Error reading audit log: {e}"
+        p = self.window()
+        if hasattr(p, "show_content"):
+            p.show_content("JARVIS H3.0 Security & Permission Audit Log", f"```json\n{content}\n```")
+        self._do_close()
+
+    def _do_close(self):
+        self.hide()
+        self.closed.emit()
+
+
+class VoiceLabOverlay(_HudOverlay):
+    """Voice Cloning, Neural Speech Profiles & Audio Verification Overlay."""
+
+    closed = pyqtSignal()
+    _OW = 560
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(f"""
+            VoiceLabOverlay {{
+                background: rgba(10, 12, 16, 252);
+                border: 1px solid {C.BORDER};
+                border-radius: 8px;
+            }}
+        """)
+        self.setFixedWidth(self._OW)
+        self._lay = QVBoxLayout(self)
+        self._lay.setContentsMargins(20, 16, 20, 16)
+        self._lay.setSpacing(10)
+        self._rebuild()
+
+    def _clear_layout(self):
+        while self._lay.count():
+            item = self._lay.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.hide()
+                w.deleteLater()
+                continue
+            sub = item.layout()
+            if sub is not None:
+                while sub.count():
+                    si = sub.takeAt(0)
+                    sw = si.widget()
+                    if sw is not None:
+                        sw.hide()
+                        sw.deleteLater()
+                sub.deleteLater()
+
+    def _rebuild(self):
+        self._clear_layout()
+        try:
+            from core.voice_cloner import list_cloned_voices
+        except Exception:
+            list_cloned_voices = lambda: []
+
+        voices = list_cloned_voices()
+
+        # Top Bar
+        top_row = QHBoxLayout()
+        hdr = QLabel("🎙️  VOICE LAB & VOICE CLONING")
+        hdr.setFont(hud_font(12, QFont.Weight.Bold))
+        hdr.setStyleSheet(f"color: {C.PRI}; background: transparent; letter-spacing: 1px;")
+        top_row.addWidget(hdr)
+        top_row.addStretch()
+
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(22, 22)
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setStyleSheet(f"background: transparent; color: {C.TEXT_DIM}; border: none; font-size: 13px;")
+        close_btn.clicked.connect(self._do_close)
+        top_row.addWidget(close_btn)
+        self._lay.addLayout(top_row)
+
+        sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
+        self._lay.addWidget(sep)
+
+        # Active voice badge
+        act_row = QHBoxLayout()
+        v_title = QLabel("Active Voice Pipeline:  Default Neural JARVIS")
+        for v in voices:
+            if v.get("is_active"):
+                v_title.setText(f"Active Voice Pipeline:  {v.get('voice_name')} ({v.get('provider')})")
+                break
+        v_title.setFont(px_font(10.5, QFont.Weight.Bold))
+        v_title.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
+        act_row.addWidget(v_title)
+        act_row.addStretch()
+        self._lay.addLayout(act_row)
+
+        # Cloned Voice Profiles Scroll
+        v_scroll = QScrollArea()
+        v_scroll.setWidgetResizable(True)
+        v_scroll.setFixedHeight(180)
+        v_scroll.setStyleSheet(f"QScrollArea {{ background: transparent; border: 1px solid {C.BORDER}; border-radius: 4px; }}")
+        
+        v_inner = QWidget()
+        v_inner.setStyleSheet("background: transparent;")
+        v_lay = QVBoxLayout(v_inner)
+        v_lay.setContentsMargins(6, 6, 6, 6)
+        v_lay.setSpacing(6)
+
+        if voices:
+            for v in voices:
+                card = QFrame()
+                card.setStyleSheet(f"background: {C.PANEL2}; border: 1px solid {C.BORDER}; border-radius: 5px;")
+                c_lay = QHBoxLayout(card)
+                c_lay.setContentsMargins(8, 6, 8, 6)
+                
+                info_lay = QVBoxLayout()
+                info_lay.setSpacing(2)
+                t_lbl = QLabel(f"<b>{v.get('voice_name')}</b>  [{v.get('provider')}]")
+                t_lbl.setFont(px_font(10))
+                t_lbl.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
+                info_lay.addWidget(t_lbl)
+                
+                q = v.get("audio_quality", {})
+                snr = q.get("snr_db", "N/A")
+                sub_lbl = QLabel(f"Quality: SNR {snr} dB | Created: {v.get('created_at', '')[:10]}")
+                sub_lbl.setFont(px_font(8.5, mono=True))
+                sub_lbl.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
+                info_lay.addWidget(sub_lbl)
+                c_lay.addLayout(info_lay, stretch=1)
+
+                v_name = v.get("voice_name")
+                if not v.get("is_active"):
+                    act_btn = QPushButton("Activate")
+                    act_btn.setFont(px_font(9, QFont.Weight.Bold))
+                    act_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                    act_btn.setStyleSheet(f"background: {C.PANEL}; color: {C.PRI}; border: 1px solid {C.BORDER}; border-radius: 3px; padding: 3px 8px;")
+                    act_btn.clicked.connect(lambda _, n=v_name: self._activate_voice(n))
+                    c_lay.addWidget(act_btn)
+                else:
+                    curr_badge = QLabel("ACTIVE")
+                    curr_badge.setFont(px_font(9, QFont.Weight.Bold, mono=True))
+                    curr_badge.setStyleSheet(f"color: {C.GREEN}; background: transparent;")
+                    c_lay.addWidget(curr_badge)
+
+                del_btn = QPushButton("Delete")
+                del_btn.setFont(px_font(9))
+                del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                del_btn.setStyleSheet(f"background: transparent; color: {C.RED}; border: none; padding: 3px 6px;")
+                del_btn.clicked.connect(lambda _, n=v_name: self._delete_voice(n))
+                c_lay.addWidget(del_btn)
+
+                v_lay.addWidget(card)
+        else:
+            empty_box = QLabel("No cloned voices enrolled yet.\nUse Voice Lab to clone voices ethically with owner consent.")
+            empty_box.setFont(px_font(10))
+            empty_box.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent; padding: 20px;")
+            empty_box.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            v_lay.addWidget(empty_box)
+
+        v_lay.addStretch()
+        v_scroll.setWidget(v_inner)
+        self._lay.addWidget(v_scroll)
+
+        # Instructions / Guardrail Note
+        guard_lbl = QLabel("🛡️ Consent Invariant: Voice cloning strictly requires verified verbal or written consent.")
+        guard_lbl.setFont(px_font(9))
+        guard_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
+        self._lay.addWidget(guard_lbl)
+
+        # Bottom Buttons
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+
+        help_btn = QPushButton("ℹ️ How to Clone")
+        help_btn.setFont(px_font(10))
+        help_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        help_btn.setStyleSheet(f"background: {C.PANEL}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 4px; padding: 5px 12px;")
+        help_btn.clicked.connect(self._show_help)
+        btn_row.addWidget(help_btn)
+
+        btn_row.addStretch()
+
+        done_btn = QPushButton("Close")
+        done_btn.setFont(px_font(10, QFont.Weight.Bold))
+        done_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        done_btn.setStyleSheet(f"background: {C.PRI}; color: {C.WHITE}; border: none; border-radius: 4px; padding: 5px 16px;")
+        done_btn.clicked.connect(self._do_close)
+        btn_row.addWidget(done_btn)
+        self._lay.addLayout(btn_row)
+
+    def _activate_voice(self, name: str):
+        try:
+            from core.voice_cloner import switch_active_voice
+            switch_active_voice(name)
+        except Exception:
+            pass
+        self._rebuild()
+
+    def _delete_voice(self, name: str):
+        try:
+            from core.voice_cloner import delete_cloned_voice
+            delete_cloned_voice(name)
+        except Exception:
+            pass
+        self._rebuild()
+
+    def _show_help(self):
+        p = self.window()
+        if hasattr(p, "show_content"):
+            p.show_content(
+                "JARVIS Voice Lab Guide",
+                "### How to Clone a Voice in JARVIS H3.0\n\n"
+                "1. **Via Voice Command:** Say: `JARVIS, clone voice from my sample named Aman with consent verified`\n"
+                "2. **Via Audio File:** Say: `JARVIS, clone voice named Maya from file /path/to/sample.wav with consent verified`\n\n"
+                "**Audio Quality Guardrails:**\n"
+                "- Clean background (SNR > 10 dB)\n"
+                "- 5 to 60 seconds duration\n"
+                "- Butterworth bandpass & normalisation applied automatically."
+            )
+        self._do_close()
+
+    def _do_close(self):
+        self.hide()
+        self.closed.emit()
+
+

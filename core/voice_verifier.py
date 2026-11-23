@@ -84,6 +84,12 @@ def _extract_acoustic_features(audio_data: np.ndarray, sample_rate: int = 16000)
 
 def is_enrolled() -> bool:
     """Check if owner voiceprint profile exists."""
+    try:
+        from core import identity_engine
+        if identity_engine.is_owner_enrolled():
+            return True
+    except Exception:
+        pass
     return VOICEPRINT_FILE.is_file()
 
 
@@ -92,6 +98,9 @@ def is_voice_match_enabled() -> bool:
     if not is_enrolled():
         return False
     try:
+        from core import identity_engine
+        if identity_engine.is_owner_enrolled():
+            return True
         data = json.loads(VOICEPRINT_FILE.read_text(encoding="utf-8"))
         if not (data.get("enabled", False) and data.get("calibrated_real", False)):
             return False
@@ -123,32 +132,52 @@ def enroll_owner_voice(
 ) -> dict:
     """
     Enroll or calibrate owner's voiceprint profile.
+    Integrates with H3.0 Layered Identity Engine.
     """
-    features = _extract_acoustic_features(audio_data, sample_rate)
-    profile = {
-        "owner": owner_name,
-        "enrolled_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "sample_rate": sample_rate,
-        "enabled": True,
-        "calibrated_real": True,
-        "vector": features.tolist()
-    }
-    VOICEPRINT_FILE.write_text(json.dumps(profile, indent=2), encoding="utf-8")
-    return {
-        "status": "ENROLLED",
-        "owner": owner_name,
-        "features_dim": len(features),
-        "enrolled_at": profile["enrolled_at"]
-    }
+    try:
+        from core import identity_engine
+        return identity_engine.enroll_owner_profile(
+            name=owner_name,
+            samples=[audio_data],
+            sample_rate=sample_rate
+        )
+    except Exception as e:
+        features = _extract_acoustic_features(audio_data, sample_rate)
+        profile = {
+            "owner": owner_name,
+            "enrolled_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "sample_rate": sample_rate,
+            "enabled": True,
+            "calibrated_real": True,
+            "vector": features.tolist()
+        }
+        VOICEPRINT_FILE.write_text(json.dumps(profile, indent=2), encoding="utf-8")
+        return {
+            "status": "ENROLLED",
+            "owner": owner_name,
+            "features_dim": len(features),
+            "enrolled_at": profile["enrolled_at"]
+        }
 
 
 def verify_speaker(audio_data: np.ndarray, sample_rate: int = 16000) -> Tuple[bool, float, str]:
     """
-    Verify if incoming audio matches the enrolled owner's voiceprint.
+    Verify if incoming audio matches the enrolled owner's voiceprint with Liveness and Anti-Replay.
     Returns: (is_match, similarity_score, speaker_name)
     """
     if not is_enrolled() or not is_voice_match_enabled():
         return True, 1.0, OWNER_DEFAULT_NAME
+
+    try:
+        from core import identity_engine
+        res = identity_engine.authenticate_speaker_turn(audio_data, sample_rate)
+        if res.state in ("OWNER_AUTHENTICATED", "TRUSTED_PERSON"):
+            return True, res.confidence, res.speaker_name
+        elif res.state == "SPOOF_SUSPECTED":
+            return False, res.confidence, "Replay / Spoof Detected"
+        return False, res.confidence, res.speaker_name
+    except Exception as e:
+        print(f"[VoiceVerifier] Layered verification fallback: {e}")
 
     try:
         profile = json.loads(VOICEPRINT_FILE.read_text(encoding="utf-8"))
@@ -158,11 +187,7 @@ def verify_speaker(audio_data: np.ndarray, sample_rate: int = 16000) -> Tuple[bo
             return True, 1.0, OWNER_DEFAULT_NAME
 
         cur_vec = _extract_acoustic_features(audio_data, sample_rate)
-
-        # Cosine similarity
-        similarity = float(np.dot(ref_vec, cur_vec))
-
-        # Check match against threshold
+        similarity = float(np.dot(ref_vec[:len(cur_vec)], cur_vec[:len(ref_vec)]))
         is_match = similarity >= MATCH_THRESHOLD
         speaker = owner_name if is_match else "Unrecognized Speaker"
         return is_match, round(similarity, 3), speaker

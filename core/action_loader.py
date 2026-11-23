@@ -158,6 +158,18 @@ class ActionRegistry:
         rec = self._actions.get(name)
         if rec is None or not rec.valid:
             return f"Action '{name}' is not available."
+
+        # H3.0 Multi-User Permission & Security Guardrail
+        try:
+            from core.permissions import check_permission, ACTION_SECURITY_TIERS, SecurityTier
+            tier = ACTION_SECURITY_TIERS.get(name, SecurityTier.OWNER_ONLY)
+            allowed, reason = check_permission(tier, name)
+            if not allowed:
+                self._logger(f"[SECURITY] Action '{name}' blocked: {reason}")
+                return f"Sorry, this operation requires owner authorization: {reason}"
+        except Exception as perm_err:
+            self._logger(f"Permission verification error for '{name}': {perm_err}")
+
         try:
             return _call_handler(rec.handler, parameters, ctx or {}) or "Done."
         except Exception as e:

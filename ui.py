@@ -310,6 +310,14 @@ class JarvisUI:
         self._win._ready = False
         self._win._reconfig_sig.emit()
 
+    def show_identity(self) -> None:
+        """Thread-safe: open the Owner Identity & Access Control overlay."""
+        self._win._identity_sig.emit()
+
+    def show_voice_lab(self) -> None:
+        """Thread-safe: open the Voice Lab & Voice Cloning overlay."""
+        self._win._voice_lab_sig.emit()
+
     def show_camera_frame(self, img_bytes: bytes):
         """Thread-safe: show a webcam frame in the small overlay (screen captures)."""
         self._win._camera_sig.emit(img_bytes)

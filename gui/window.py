@@ -76,11 +76,13 @@ from gui.overlays import (
     ClipboardPanel,
     ConfirmBanner,
     CustomizeOverlay,
+    IdentityAuthOverlay,
     MemoryOverlay,
     PluginManagerOverlay,
     PluginSettingsOverlay,
     RemoteKeyOverlay,
     SetupOverlay,
+    VoiceLabOverlay,
 )
 from gui.providers_panel import (
     ProvidersOverlay,
@@ -122,6 +124,8 @@ class MainWindow(QMainWindow):
     _quiz_sig       = pyqtSignal(str, object, object)  # (topic, questions, grader)
     _quiz_hide_sig  = pyqtSignal()
     _review_sig     = pyqtSignal(str, str, object, object)  # document review payload
+    _identity_sig   = pyqtSignal()           # thread-safe open Identity & Auth overlay
+    _voice_lab_sig  = pyqtSignal()           # thread-safe open Voice Lab overlay
 
     def __init__(self, face_path: str):
         super().__init__()
@@ -470,6 +474,8 @@ class MainWindow(QMainWindow):
         self._quiz_sig.connect(self._show_quiz)
         self._quiz_hide_sig.connect(self._hide_quiz)
         self._review_sig.connect(self._show_review)
+        self._identity_sig.connect(self._open_identity_panel)
+        self._voice_lab_sig.connect(self._open_voice_lab_panel)
         self._cam_stop = threading.Event()
 
         # Camera preview overlay (child of central widget, positioned in resizeEvent)
@@ -3154,6 +3160,18 @@ class MainWindow(QMainWindow):
         self._centre_overlay(ov)
         self._memory_overlay = ov
 
+    # ── H3.0 Identity & Voice Lab panels ────────────────────────────────────
+
+    def _open_identity_panel(self):
+        ov = IdentityAuthOverlay(parent=self.centralWidget())
+        self._centre_overlay(ov)
+        self._identity_overlay = ov
+
+    def _open_voice_lab_panel(self):
+        ov = VoiceLabOverlay(parent=self.centralWidget())
+        self._centre_overlay(ov)
+        self._voice_lab_overlay = ov
+
     # ── Irreversible-action confirmation ─────────────────────────────────────
 
     def _show_confirm_banner(self, title: str, detail: str):
@@ -3407,6 +3425,10 @@ class MainWindow(QMainWindow):
                 self._context_panel.set_current_tab(3)
         elif action == "memory":
             self._open_memory_panel()
+        elif action == "identity":
+            self._open_identity_panel()
+        elif action == "voice_lab":
+            self._open_voice_lab_panel()
         elif action == "plugins":
             self._open_plugin_manager()
         elif action == "remote":

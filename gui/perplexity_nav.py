@@ -247,6 +247,14 @@ class PerplexitySidebar(QWidget):
         self._btn_memory.clicked.connect(lambda: self.settings_action.emit("memory"))
         scroll_lay.addWidget(self._btn_memory)
 
+        self._btn_identity = NavItemButton("🛡️", "Identity & Auth")
+        self._btn_identity.clicked.connect(lambda: self.settings_action.emit("identity"))
+        scroll_lay.addWidget(self._btn_identity)
+
+        self._btn_voice_lab = NavItemButton("🎙️", "Voice Lab")
+        self._btn_voice_lab.clicked.connect(lambda: self.settings_action.emit("voice_lab"))
+        scroll_lay.addWidget(self._btn_voice_lab)
+
         self._btn_plugins = NavItemButton("🧩", "Plugins")
         self._btn_plugins.clicked.connect(lambda: self.settings_action.emit("plugins"))
         scroll_lay.addWidget(self._btn_plugins)
@@ -274,7 +282,8 @@ class PerplexitySidebar(QWidget):
         self._nav_buttons = [
             self._btn_new, self._btn_search, self._btn_chat, self._btn_hud,
             self._btn_news, self._btn_library, self._btn_tasks,
-            self._btn_memory, self._btn_plugins, self._btn_remote, self._btn_settings
+            self._btn_memory, self._btn_identity, self._btn_voice_lab,
+            self._btn_plugins, self._btn_remote, self._btn_settings
         ]
         self._select_mode(0)
 

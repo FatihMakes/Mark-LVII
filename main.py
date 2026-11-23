@@ -1275,6 +1275,11 @@ class JarvisLive:
     def _on_text_command(self, text: str):
         if not text:
             return
+        try:
+            from core.permissions import set_current_speaker, UserRole
+            set_current_speaker(UserRole.OWNER)
+        except Exception:
+            pass
         if self._wake_enabled and not self._awake:
             self.wake(reason="typed command")
         if not self._loop:
@@ -1938,6 +1943,11 @@ class JarvisLive:
                             full_speech = np.concatenate(list(self._voice_match_buf))
                             match, score, _ = voice_verifier.verify_speaker(full_speech, SEND_SAMPLE_RATE)
                             self._voice_match_buf.popleft()
+                            try:
+                                from core.permissions import set_current_speaker, UserRole
+                                set_current_speaker(UserRole.OWNER if match else UserRole.TEMPORARY_GUEST)
+                            except Exception:
+                                pass
                             if not match and score < 0.40:
                                 return
                 except Exception:

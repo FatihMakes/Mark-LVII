@@ -191,11 +191,11 @@ _IDENTITY_FIELDS = ["name", "age", "birthday", "city", "job",
                     "language", "school", "nationality"]
 
 
-def format_memory_for_prompt(memory: dict | None) -> str:
+def format_memory_for_prompt(memory: dict | None, is_owner: bool = True) -> str:
     """Build the memory block that goes into the system prompt.
+    When is_owner is False, strictly shields owner personal facts and private records.
 
-    This used to dump everything. It now sends three things:
-
+    Structure:
       1. IDENTITY  - always, in full. It is small, and it is wrong for the
          assistant to have to look up your name.
       2. RECENT    - the most recently updated entries from every other
@@ -215,6 +215,8 @@ def format_memory_for_prompt(memory: dict | None) -> str:
     already speaks before any slow step."""
     if not memory:
         return ""
+    if not is_owner:
+        return "[MEMORY: RESTRICTED GUEST SESSION — Personal owner memory is isolated and hidden]\n"
 
     core_lines: list[str] = []
 
@@ -359,11 +361,12 @@ def _score(query_words: list[str], cat: str, key: str, value: str) -> int:
     return score
 
 
-def search_memory(query: str, limit: int = 8) -> str:
+def search_memory(query: str, limit: int = 8, is_owner: bool = True) -> str:
     """Find stored facts matching `query`. Backs the recall_memory tool.
+    Strictly isolates owner memory from guest/unauthorized access."""
+    if not is_owner:
+        return "Access restricted: Owner authorization is required to access personal memory."
 
-    An empty query is treated as "show me everything you know", capped - the
-    model asks that when the user says "what do you remember about me?"."""
     memory = load_memory()
     words  = [w for w in re.split(r"[^\w]+", (query or "").lower()) if len(w) > 1]
 

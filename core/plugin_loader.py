@@ -108,6 +108,12 @@ class PluginRegistry:
     def has(self, name: str) -> bool:
         return name in self._plugins
 
+    def names(self) -> set[str]:
+        return set(self._plugins.keys())
+
+    def __len__(self) -> int:
+        return len(self._plugins)
+
     def scheduling(self, name: str) -> Optional[str]:
         """How this plugin's result should re-enter the conversation, if it said."""
         rec = self._plugins.get(name)
@@ -120,6 +126,18 @@ class PluginRegistry:
             return f"Plugin '{name}' is not available."
         if not get_plugin_enabled(name):
             return f"The '{name}' plugin is currently disabled."
+
+        # H3.0 Multi-User Permission & Security Guardrail
+        try:
+            from core.permissions import check_permission, SecurityTier
+            # Plugins default to AUTHORIZED tier
+            allowed, reason = check_permission(SecurityTier.AUTHORIZED, f"plugin_{name}")
+            if not allowed:
+                self._logger(f"[SECURITY] Plugin '{name}' blocked: {reason}")
+                return f"Sorry, this plugin requires authorization: {reason}"
+        except Exception as perm_err:
+            self._logger(f"Permission verification error for plugin '{name}': {perm_err}")
+
         try:
             return _call_run(rec.run, parameters, player, session_memory) or "Done."
         except Exception as e:
