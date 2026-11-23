@@ -69,10 +69,15 @@ cd "$REPO_DIR"
 LOG_FILE="$HOME/.jarvis_app.log"
 echo "=== JARVIS Launch $(date) ===" >> "$LOG_FILE"
 
-if [ -f "$REPO_DIR/.venv/bin/python" ]; then
-    exec "$REPO_DIR/.venv/bin/python" main.py >> "$LOG_FILE" 2>&1
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+export PYTHONUNBUFFERED=1
+
+if [ -f "$REPO_DIR/.venv/bin/python3" ]; then
+    exec "$REPO_DIR/.venv/bin/python3" -u main.py >> "$LOG_FILE" 2>&1
+elif [ -f "$REPO_DIR/.venv/bin/python" ]; then
+    exec "$REPO_DIR/.venv/bin/python" -u main.py >> "$LOG_FILE" 2>&1
 else
-    exec python3 main.py >> "$LOG_FILE" 2>&1
+    exec python3 -u main.py >> "$LOG_FILE" 2>&1
 fi
 EOF
 
