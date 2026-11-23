@@ -1648,6 +1648,22 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_row_engine"):
             self._row_engine.set_value(engine, "PRI")
             self._row_voice.set_value(voice)
+        if hasattr(self, "_header_engine_btn"):
+            self._header_engine_btn.setText(f"● {engine}")
+            color = C.AMBER if "LOCAL" in engine else (C.GREEN if "GEMINI" in engine else C.PRI)
+            self._header_engine_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {C.PANEL_BG};
+                    color: {color};
+                    border: 1px solid {color}55;
+                    border-radius: 4px;
+                    padding: 0 8px;
+                }}
+                QPushButton:hover {{
+                    border-color: {color};
+                    background: {C.PANEL_BG_HOVER};
+                }}
+            """)
         self._refresh_status_strip()
 
     def _refresh_status_strip(self) -> None:
@@ -3552,7 +3568,10 @@ class MainWindow(QMainWindow):
         if self._overlay:
             self._overlay.hide()
             self._overlay = None
-        self._apply_state("LISTENING")
+        if self._muted:
+            self._apply_state("MUTED")
+        else:
+            self._apply_state("LISTENING")
         self._assistant_name = _read_full_config().get("assistant_name", "JARVIS") or "JARVIS"
         self._log.append_log(f"SYS: Initialised. OS={os_name.upper()}. {self._assistant_name} online.")
         if self.on_audio_device_change:

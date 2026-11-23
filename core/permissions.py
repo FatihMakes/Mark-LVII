@@ -85,6 +85,11 @@ ACTION_SECURITY_LEVELS: Dict[str, str] = {
     "youtube_video": SECURITY_PUBLIC,
     "video_player": SECURITY_PUBLIC,
     "reminder": SECURITY_PUBLIC,
+    "anime_control": SECURITY_PUBLIC,
+    "google_maps": SECURITY_PUBLIC,
+    "creator_info": SECURITY_PUBLIC,
+    "mac_deep_scan": SECURITY_PUBLIC,
+    "download_manager": SECURITY_AUTHORIZED,
     
     # Authorized (Owner + Approved Friends/Colleagues)
     "code_helper": SECURITY_AUTHORIZED,
@@ -337,6 +342,14 @@ def check_permission(
         action_name = str(first_arg)
         speaker_auth_state = str(second_arg) if second_arg is not None else None
         tier_str = ACTION_SECURITY_LEVELS.get(action_name, SECURITY_AUTHORIZED)
+
+    if speaker_auth_state is None:
+        try:
+            from core.owner_session import get_owner_session
+            if get_owner_session().is_owner_session_active() and _current_speaker != UserRole.TEMPORARY_GUEST:
+                speaker_auth_state = "OWNER_AUTHENTICATED"
+        except Exception:
+            pass
 
     if speaker_auth_state is None:
         if _current_speaker == UserRole.OWNER:

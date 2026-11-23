@@ -206,9 +206,17 @@ def extract_pdf_pages(input_path: str, pages_spec: str, output_filename: str = "
 
     return f"Extracted {len(selected)} pages from `{path.name}` into `{dest}`"
 
-def generate_pdf_from_text(content: str, output_filename: str = "document.pdf", title: str = "Document") -> str:
+def generate_pdf_from_text(content: str, output_filename: str = "document.pdf", title: str = "Document", query: str = "") -> str:
     """Generate a clean, beautiful, fully valid PDF from markdown or text content.
-    Uses ReportLab as the primary rich typesetter and PyMuPDF as a guaranteed binary fallback."""
+    Delegates to the H3.2 PDF Studio with running headers/footers, dynamic page numbers,
+    strict PyMuPDF validation, and automatic macOS Preview opening."""
+    from core.pdf_studio import generate_pdf
+    res = generate_pdf(content=content, output_filename=output_filename, title=title, query=query, open_preview=True)
+    if res.get("status") == "success":
+        return f"✅ Generated PDF document saved to `{res.get('path')}` ({res.get('pages', 1)} pages, {res.get('file_size', 0)} bytes). Opened in Preview."
+    return f"Error generating PDF: {res.get('message')}"
+
+def _legacy_generate_pdf_from_text(content: str, output_filename: str = "document.pdf", title: str = "Document") -> str:
     dest = _resolve_dest(output_filename)
     if dest.suffix.lower() != ".pdf":
         dest = dest.with_suffix(".pdf")
@@ -639,9 +647,24 @@ def document_studio(parameters: dict, player=None, session_memory=None) -> str:
         return edit_pdf_text(file_path, search_text, replace_text, output_filename or None)
 
     elif action in ("generate_pdf", "create_pdf", "make_pdf"):
-        if not content:
-            return "Please provide 'content' text to generate the PDF."
-        return generate_pdf_from_text(content, output_filename or "document.pdf", title)
+        if not content and not query:
+            return "Please provide 'content' text or a topic/query to generate the PDF."
+        from core.pdf_studio import generate_pdf
+        res = generate_pdf(
+            content=content,
+            output_filename=output_filename or "document.pdf",
+            title=title,
+            query=query,
+            open_preview=True
+        )
+        msg = res.get("message", "PDF generation completed.")
+        if player and hasattr(player, "write_log"):
+            try: player.write_log(f"DOC: {msg}")
+            except Exception: pass
+        if player and hasattr(player, "show_content"):
+            try: player.show_content(f"Generated PDF: {res.get('filename')}", f"Path: {res.get('path')}\nPages: {res.get('pages', 1)}\nSize: {res.get('file_size', 0)} bytes\nStatus: {res.get('status')}")
+            except Exception: pass
+        return msg
 
     elif action in ("merge_pdf", "merge"):
         if not input_paths:

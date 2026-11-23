@@ -332,15 +332,39 @@ def verify_challenge(spoken_text: str, session_id: str = "default") -> bool:
 # ── Owner Profile Manager ─────────────────────────────────────────────────────
 
 def load_owner_profile() -> Optional[dict]:
-    """Loads owner profile if enrolled and valid."""
-    if not IDENTITY_FILE.is_file():
-        return None
-    try:
-        data = json.loads(IDENTITY_FILE.read_text(encoding="utf-8"))
-        if data.get("enrolled") and data.get("vector") and len(data["vector"]) >= 20:
-            return data
-    except Exception as e:
-        print(f"[IdentityEngine] ⚠️ Error loading owner profile: {e}")
+    """Loads owner profile if enrolled and valid, auto-syncing from ~/.jarvis_voiceprint.json if needed."""
+    if IDENTITY_FILE.is_file():
+        try:
+            data = json.loads(IDENTITY_FILE.read_text(encoding="utf-8"))
+            if data.get("enrolled") and data.get("vector") and len(data["vector"]) >= 20:
+                return data
+        except Exception as e:
+            print(f"[IdentityEngine] ⚠️ Error loading owner profile: {e}")
+
+    # Fallback & auto-sync from ~/.jarvis_voiceprint.json
+    voiceprint_path = Path.home() / ".jarvis_voiceprint.json"
+    if voiceprint_path.is_file():
+        try:
+            vp = json.loads(voiceprint_path.read_text(encoding="utf-8"))
+            vec = vp.get("vector", [])
+            if vec and len(vec) >= 20:
+                owner_name = vp.get("owner", DEFAULT_OWNER_NAME)
+                profile = {
+                    "owner_name": owner_name,
+                    "preferred_address": "Sir",
+                    "role": "OWNER",
+                    "enrolled": True,
+                    "enrolled_at": vp.get("enrolled_at", time.strftime("%Y-%m-%d %H:%M:%S")),
+                    "vector": vec,
+                    "hardware_uuid": get_machine_hardware_uuid(),
+                    "security_tier": "OWNER_UNRESTRICTED"
+                }
+                MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+                IDENTITY_FILE.write_text(json.dumps(profile, indent=2), encoding="utf-8")
+                return profile
+        except Exception as e:
+            print(f"[IdentityEngine] Voiceprint sync error: {e}")
+
     return None
 
 

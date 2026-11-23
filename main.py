@@ -1960,10 +1960,19 @@ class JarvisLive:
                             match, score, _ = voice_verifier.verify_speaker(full_speech, SEND_SAMPLE_RATE)
                             try:
                                 from core.permissions import set_current_speaker, UserRole
-                                set_current_speaker(UserRole.OWNER if match else UserRole.TEMPORARY_GUEST)
+                                from core.owner_session import get_owner_session
+                                owner_sess = get_owner_session()
+                                if match and score >= 0.55:
+                                    owner_sess.authenticate_owner("voice_biometrics", confidence=score)
+                                    set_current_speaker(UserRole.OWNER)
+                                elif owner_sess.is_owner_session_active():
+                                    owner_sess.touch()
+                                    set_current_speaker(UserRole.OWNER)
+                                else:
+                                    set_current_speaker(UserRole.TEMPORARY_GUEST)
                             except Exception:
                                 pass
-                            if not match and score < 0.40:
+                            if not match and score < 0.35 and not (owner_sess and owner_sess.is_owner_session_active()):
                                 return
                 except Exception:
                     pass

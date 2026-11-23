@@ -4,7 +4,7 @@ Contributed by Aman Kumar (@iamTechieAman).
 
 Supports voice commands:
   - "JARVIS, arm anti-theft guard" / "Secure my phone"
-  - "JARVIS, disarm security PIN 1170" / "Silence alarm"
+  - "JARVIS, disarm security with master PIN" / "Silence alarm"
   - "JARVIS, anti-theft status" / "Show theft incidents"
   - "JARVIS, test anti-theft siren"
 """
@@ -97,7 +97,7 @@ def anti_theft_action(parameters: dict, player=None, session_memory=None) -> str
                 f"**Trigger Reason:** {inc.trigger_reason}\n\n"
                 f"**Device:** {inc.device_name}\n\n"
                 f"**Timestamp:** `{inc.timestamp}`\n\n"
-                "> Maximum volume emergency siren active. Say **'JARVIS, disarm security'** or enter PIN 1170 to silence."
+                "> Maximum volume emergency siren active. Say **'JARVIS, disarm security'** or enter your master PIN to silence."
             )
         return "Simulated anti-theft alarm triggered, sir! Emergency siren active. Say 'JARVIS, disarm security' to stand down."
 
@@ -107,7 +107,7 @@ def anti_theft_action(parameters: dict, player=None, session_memory=None) -> str
 TOOL = {
     "name": "anti_theft",
     "description": (
-        "Anti-Theft Siren Guard and Intrusion Defense Tool for JARVIS H3.1. "
+        "Anti-Theft Siren Guard and Intrusion Defense Tool for JARVIS H3.2. "
         "Arms device protection against unauthorized physical lifting, charger disconnection, and movement. "
         "Sounds emergency siren upon intrusion and requires verified owner voice or PIN to disarm."
     ),
@@ -120,7 +120,7 @@ TOOL = {
             },
             "pin": {
                 "type": "STRING",
-                "description": "Disarm PIN code (default: '1170')"
+                "description": "Owner Master Disarm PIN code"
             },
             "delay": {
                 "type": "INTEGER",

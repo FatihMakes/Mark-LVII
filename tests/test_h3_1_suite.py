@@ -288,16 +288,20 @@ class TestH31ComprehensiveSuite(unittest.TestCase):
 
     def test_20_anti_theft_charger_disconnect_trigger(self):
         """Test 20: Charger disconnect while armed immediately triggers SIREN alarm and incident logging."""
+        from core.owner_session import get_owner_session
+        get_owner_session().set_owner_pin("", "5599", is_authenticated_owner=True)
         guard = AntiTheftEngine()
         guard.arm(delay_seconds=0)
 
         incident = guard.trigger_theft_alarm("CHARGER_DISCONNECTED", "Primary Android Companion")
         self.assertEqual(incident.trigger_reason, "CHARGER_DISCONNECTED")
         self.assertEqual(guard.get_state(), "TRIGGERED")
-        guard.disarm("1170")
+        guard.disarm("5599")
 
     def test_21_anti_theft_pin_disarm(self):
-        """Test 21: Correct PIN 1170 disarms guard; wrong PIN fails."""
+        """Test 21: Dynamic secure owner PIN disarms guard; wrong PIN fails."""
+        from core.owner_session import get_owner_session
+        get_owner_session().set_owner_pin("", "5599", is_authenticated_owner=True)
         guard = AntiTheftEngine()
         guard.arm(delay_seconds=0)
         guard.trigger_theft_alarm("CHARGER_DISCONNECTED")
@@ -307,8 +311,8 @@ class TestH31ComprehensiveSuite(unittest.TestCase):
         self.assertFalse(ok_fail)
         self.assertEqual(guard.get_state(), "TRIGGERED")
 
-        # Correct PIN
-        ok_ok, msg_ok = guard.disarm("1170")
+        # Correct dynamic PIN
+        ok_ok, msg_ok = guard.disarm("5599")
         self.assertTrue(ok_ok)
         self.assertEqual(guard.get_state(), "DISARMED")
 

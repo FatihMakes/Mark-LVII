@@ -67,7 +67,6 @@ class AntiTheftEngine:
         self._detect_motion = True
         self._detect_flip = True
         self._alarm_duration_sec = 60
-        self._disarm_pin = "1170"
         self._active_incident: Optional[TheftIncident] = None
         self._load_config()
 
@@ -81,7 +80,6 @@ class AntiTheftEngine:
                 self._detect_flip = cfg.get("detect_flip", True)
                 self._arm_delay_sec = cfg.get("arm_delay_sec", 10)
                 self._alarm_duration_sec = cfg.get("alarm_duration_sec", 60)
-                self._disarm_pin = cfg.get("disarm_pin", "1170")
             except Exception:
                 pass
 
@@ -145,8 +143,15 @@ class AntiTheftEngine:
         if self._arm_timer and self._arm_timer.is_alive():
             self._arm_timer.cancel()
 
-        # Authorization check
-        if not is_owner and pin.strip() != self._disarm_pin:
+        # Dynamic Secure Credential Verification (H3.2)
+        pin_valid = False
+        try:
+            from core.owner_session import get_owner_session
+            pin_valid = get_owner_session().verify_pin(pin.strip())
+        except Exception:
+            pin_valid = False
+
+        if not is_owner and not pin_valid:
             return False, "Security Disarm Failed: Invalid PIN provided. System remains armed."
 
         self._state = GuardState.DISARMED
