@@ -2028,7 +2028,7 @@ class IdentityAuthOverlay(_HudOverlay):
             list_authorized_users = lambda: []
             get_current_speaker = lambda: "UNKNOWN"
 
-        prof = get_owner_profile()
+        prof = get_owner_profile() or {}
         hw_token = get_hardware_device_token()
         auth_users = list_authorized_users()
         curr_speaker = get_current_speaker()

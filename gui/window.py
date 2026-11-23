@@ -1650,10 +1650,10 @@ class MainWindow(QMainWindow):
             self._row_voice.set_value(voice)
         if hasattr(self, "_header_engine_btn"):
             self._header_engine_btn.setText(f"● {engine}")
-            color = C.AMBER if "LOCAL" in engine else (C.GREEN if "GEMINI" in engine else C.PRI)
+            color = C.ACC if "LOCAL" in engine else (C.GREEN if "GEMINI" in engine else C.PRI)
             self._header_engine_btn.setStyleSheet(f"""
                 QPushButton {{
-                    background: {C.PANEL_BG};
+                    background: {C.PANEL2};
                     color: {color};
                     border: 1px solid {color}55;
                     border-radius: 4px;
@@ -1661,7 +1661,7 @@ class MainWindow(QMainWindow):
                 }}
                 QPushButton:hover {{
                     border-color: {color};
-                    background: {C.PANEL_BG_HOVER};
+                    background: {C.HOVER};
                 }}
             """)
         self._refresh_status_strip()
