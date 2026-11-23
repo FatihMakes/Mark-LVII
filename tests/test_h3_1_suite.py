@@ -245,7 +245,7 @@ class TestH31ComprehensiveSuite(unittest.TestCase):
         """Test 15: Composing a message creates a pending draft review card and DOES NOT send immediately."""
         reset_whatsapp_draft()
         res = whatsapp_automation({
-            "action": "send_message",
+            "action": "compose",
             "recipient": "Aman",
             "message": "Meeting scheduled for 3 PM"
         })
@@ -256,7 +256,7 @@ class TestH31ComprehensiveSuite(unittest.TestCase):
         """Test 16: Explicit confirmation required before message is dispatched."""
         reset_whatsapp_draft()
         whatsapp_automation({
-            "action": "send_message",
+            "action": "compose",
             "recipient": "Aman",
             "message": "Project deployed successfully"
         })

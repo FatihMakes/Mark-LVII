@@ -1809,8 +1809,10 @@ class JarvisLive:
                         and str(args.get("mode") or "").lower() != "status"):
                     args["folder"] = self.ui.current_file
                     args["mode"] = "improve"
+                from core.owner_session import get_active_session_context
+                _sess_ctx = get_active_session_context()
                 _ctx = {"player": self.ui, "speak": self.speak,
-                        "response": None, "session_memory": None}
+                        "response": None, "session_memory": _sess_ctx}
                 r = await loop.run_in_executor(None, lambda: self._action_registry.run(name, args, _ctx))
                 result = r or "Done."
                 # web_search: mirror results to the on-screen content panel
@@ -1827,9 +1829,11 @@ class JarvisLive:
 
             else:
                 if self._plugin_registry.has(name):
+                    from core.owner_session import get_active_session_context
+                    _sess_ctx = get_active_session_context()
                     r = await loop.run_in_executor(
                         None,
-                        lambda: self._plugin_registry.run(name, args, player=self.ui, session_memory=None)
+                        lambda: self._plugin_registry.run(name, args, player=self.ui, session_memory=_sess_ctx)
                     )
                     result = r or "Done."
                 else:

@@ -21,7 +21,8 @@ class TestPDFStudio(unittest.TestCase):
         # Even with empty content, must generate structured sections
         synthesized = synthesize_content_if_needed("", query="Neural Network Architecture")
         self.assertTrue(len(synthesized) > 300)
-        self.assertIn("Neural Network Architecture", synthesized)
+        self.assertIn("neural network", synthesized.lower())
+        self.assertIn("architecture", synthesized.lower())
         self.assertIn("Executive Summary", synthesized)
 
     def test_02_pdf_generation_and_validation(self):

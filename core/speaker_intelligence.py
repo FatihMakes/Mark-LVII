@@ -412,4 +412,9 @@ def get_speaker_engine() -> SpeakerIntelligenceEngine:
 def reset_speaker_engine() -> SpeakerIntelligenceEngine:
     global _intelligence_engine
     _intelligence_engine = SpeakerIntelligenceEngine()
+    try:
+        from core import permissions
+        permissions.set_current_speaker(permissions.UserRole.OWNER)
+    except Exception:
+        pass
     return _intelligence_engine

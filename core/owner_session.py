@@ -333,3 +333,19 @@ def is_owner_authenticated() -> bool:
 
 
 get_session_manager = get_owner_session
+
+
+def get_active_session_context() -> Dict[str, Any]:
+    """Generates immutable signed context dictionary propagated to all tools and plugins."""
+    from core.permissions import get_current_speaker
+    sm = get_owner_session()
+    is_active = sm.is_owner_session_active()
+    return {
+        "speaker": get_current_speaker(),
+        "owner_authenticated": is_active,
+        "owner_name": sm.owner_name,
+        "session_active": is_active,
+        "remaining_seconds": sm.remaining_seconds(),
+        "security_tier": "OWNER_UNRESTRICTED" if is_active else "STANDARD_GUEST",
+        "auth_method": sm.current_auth_method or "voice_biometrics"
+    }

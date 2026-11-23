@@ -159,6 +159,14 @@ class ActionRegistry:
         if rec is None or not rec.valid:
             return f"Action '{name}' is not available."
 
+        ctx_map = dict(ctx or {})
+        if not ctx_map.get("session_memory"):
+            try:
+                from core.owner_session import get_active_session_context
+                ctx_map["session_memory"] = get_active_session_context()
+            except Exception:
+                pass
+
         # H3.0 Multi-User Permission & Security Guardrail
         try:
             from core.permissions import check_permission, ACTION_SECURITY_TIERS, SecurityTier
@@ -171,7 +179,7 @@ class ActionRegistry:
             self._logger(f"Permission verification error for '{name}': {perm_err}")
 
         try:
-            return _call_handler(rec.handler, parameters, ctx or {}) or "Done."
+            return _call_handler(rec.handler, parameters, ctx_map) or "Done."
         except Exception as e:
             self._logger(f"Action '{name}' crashed during run(): {e}")
             traceback.print_exc()
