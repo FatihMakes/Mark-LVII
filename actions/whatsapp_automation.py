@@ -1,14 +1,14 @@
 """
-actions/whatsapp_automation.py — WhatsApp Messaging, Calling & Hands-Free Driving Mode for JARVIS H3.1
+actions/whatsapp_automation.py — WhatsApp Desktop Messaging, Calling & Automation for JARVIS H3.3
 Contributed by Aman Kumar (@iamTechieAman).
 
 Supports:
+  - macOS WhatsApp Desktop native integration via official URL scheme & AppleScript
   - Contact search & disambiguation
-  - Read unread WhatsApp messages & notifications aloud
-  - Compose & send messages with explicit recipient & owner confirmation
-  - Voice notes recording & dispatch
-  - Hands-Free WhatsApp Calling (initiate, answer, end call)
-  - Dedicated Hands-Free Driving Mode (zero-touch voice operation)
+  - Real unread message reading / notification status
+  - Compose & send messages with explicit confirmation safeguard
+  - Hands-Free WhatsApp Calling & Driving Mode
+  - Transparent execution verification and permission reporting
 """
 from __future__ import annotations
 
@@ -19,59 +19,32 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from core import companion_gateway, permissions
+from core.whatsapp_desktop_controller import get_whatsapp_controller
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 MEMORY_DIR = ROOT_DIR / "memory"
-CONTACTS_FILE = MEMORY_DIR / "whatsapp_contacts.json"
 PENDING_MESSAGES_FILE = MEMORY_DIR / "pending_whatsapp_messages.json"
 
-# Default trusted contacts store for instant disambiguation
-DEFAULT_CONTACTS = {
-    "aman": {"name": "Aman Kumar", "phone": "+919876543210", "relationship": "Owner"},
-    "rahul": {"name": "Rahul Sharma", "phone": "+919876543210", "relationship": "Colleague"},
-    "maya": {"name": "Maya Patel", "phone": "+919811223344", "relationship": "Family"},
-    "rohit": {"name": "Rohit Verma", "phone": "+919988776655", "relationship": "Friend"},
-    "doctor": {"name": "Dr. Arvind Mehta", "phone": "+919123456789", "relationship": "Clinic"},
-}
-
-# In-memory pending message queue
 _PENDING_DISPATCH: Dict[str, dict] = {}
 _HANDS_FREE_ACTIVE = False
 
 
 def _load_contacts() -> Dict[str, dict]:
-    MEMORY_DIR.mkdir(parents=True, exist_ok=True)
-    loaded = dict(DEFAULT_CONTACTS)
-    if CONTACTS_FILE.is_file():
-        try:
-            from_file = json.loads(CONTACTS_FILE.read_text(encoding="utf-8"))
-            loaded.update(from_file)
-        except Exception:
-            pass
-    for k, v in DEFAULT_CONTACTS.items():
-        if k not in loaded:
-            loaded[k] = v
-    CONTACTS_FILE.write_text(json.dumps(loaded, indent=2), encoding="utf-8")
-    return loaded
+    return get_whatsapp_controller().load_contacts()
 
 
 def _resolve_contact(query: str) -> Optional[dict]:
-    contacts = _load_contacts()
-    q = query.lower().strip()
-    if q in contacts:
-        return contacts[q]
-    for key, c in contacts.items():
-        if q in c["name"].lower() or q in key:
-            return c
-    return None
+    return get_whatsapp_controller().resolve_contact(query)
 
 
 def whatsapp_automation(parameters: dict, player=None, session_memory=None) -> str:
     """
-    Executes WhatsApp messaging, calling, notification read-out, and hands-free driving mode.
+    Executes WhatsApp messaging, calling, notification read-out, and driving mode.
+    Uses native macOS WhatsApp Desktop integration when available, with fallback to companion gateway.
     """
     global _HANDS_FREE_ACTIVE
 
+    controller = get_whatsapp_controller()
     action = (parameters.get("action") or "status").lower().strip()
     recipient = parameters.get("recipient") or parameters.get("contact") or parameters.get("query") or parameters.get("name") or ""
     message_text = parameters.get("message") or parameters.get("text") or ""
@@ -80,10 +53,26 @@ def whatsapp_automation(parameters: dict, player=None, session_memory=None) -> s
     contacts = _load_contacts()
     gw = companion_gateway.get_companion_gateway()
 
-    # 1. Contact Search & Lookup
-    if action in ("search_contact", "find_contact", "lookup_contact", "contacts"):
+    # 1. Status / Diagnostics
+    if action in ("status", "telemetry", "info"):
+        tel = controller.get_telemetry()
+        status_md = [
+            "# 📱 WhatsApp Integration Status",
+            f"- **Desktop App Installed:** `{'Yes' if tel['installed'] else 'No'}` ({tel['app_path'] or 'Not found'})",
+            f"- **Process Running:** `{'Yes' if tel['running'] else 'No'}`",
+            f"- **macOS Accessibility Granted:** `{'Yes' if tel['accessibility_granted'] else 'Needs Permission'}`",
+            f"- **Contacts Loaded:** `{tel['contacts_count']}` contacts",
+            f"- **Driving Mode:** `{'Enabled' if _HANDS_FREE_ACTIVE else 'Disabled'}`"
+        ]
+        if player and hasattr(player, "show_content"):
+            player.show_content("WhatsApp Status", "\n".join(status_md))
+        inst_str = "installed and operational" if tel["installed"] else "not installed"
+        return f"WhatsApp Desktop is {inst_str} on macOS, with {tel['contacts_count']} contacts available."
+
+    # 2. Contact Search & Lookup
+    elif action in ("search_contact", "find_contact", "lookup_contact", "contacts"):
         if not recipient:
-            clist = [f"- **{c['name']}** ({c['relationship']}): `{c['phone']}`" for c in contacts.values()]
+            clist = [f"- **{c.get('name', k)}** ({c.get('relationship', 'Contact')}): `{c.get('phone', '')}`" for k, c in contacts.items()]
             md = "# 📇 Saved WhatsApp Contacts\n" + "\n".join(clist)
             if player and hasattr(player, "show_content"):
                 player.show_content("WhatsApp Contacts", md)
@@ -91,34 +80,31 @@ def whatsapp_automation(parameters: dict, player=None, session_memory=None) -> s
 
         found = _resolve_contact(recipient)
         if found:
-            return f"Found contact: {found['name']} ({found['relationship']}), phone number {found['phone']}."
+            return f"Found contact: {found.get('name')} ({found.get('relationship', 'Contact')}), phone number {found.get('phone')}."
         return f"Contact '{recipient}' was not found in your saved directory. Please provide their full phone number."
 
-    # 2. Read Unread Notifications / Messages Aloud
+    # 3. Read Unread Notifications / Messages
     elif action in ("read_unread", "unread", "read_messages"):
-        # Emulates Android notification reader
-        mock_notifications = [
-            {"from": "Rahul Sharma", "text": "Are we meeting at 3 PM today?", "time": "2 mins ago"},
-            {"from": "Maya Patel", "text": "Please bring the project documents home.", "time": "15 mins ago"}
-        ]
-        announcements = [f"Message from {n['from']}: '{n['text']}'" for n in mock_notifications]
-        summary = "You have 2 unread WhatsApp messages, sir. " + " ... ".join(announcements)
+        unread = controller.read_unread_messages()
+        if not unread:
+            return "No unread WhatsApp messages found at this time, sir."
+        announcements = [f"{n.get('source', 'Message')}: {n.get('title', n.get('message', ''))}" for n in unread]
+        summary = f"You have {len(unread)} unread WhatsApp messages, sir. " + " ... ".join(announcements)
         if player and hasattr(player, "write_log"):
-            player.write_log(f"WhatsApp: Read {len(mock_notifications)} unread notifications.")
+            player.write_log(f"WhatsApp: Read {len(unread)} unread messages.")
         return summary
 
-    # 3. Compose Message & Prepare Confirmation
-    elif action in ("compose", "compose_message", "prepare_message", "send", "send_message"):
+    # 4. Compose Message & Prepare Confirmation
+    elif action in ("compose", "compose_message", "prepare_message") or (action in ("send", "send_message") and not confirm_code and not parameters.get("draft_id") and not parameters.get("immediate")):
         if not recipient:
             return "Who would you like to send the message to? Please specify a contact name."
         if not message_text:
             return f"What message would you like to send to {recipient}?"
 
         contact_info = _resolve_contact(recipient)
-        phone = contact_info["phone"] if contact_info else recipient
-        display_name = contact_info["name"] if contact_info else recipient
+        phone = contact_info.get("phone") if contact_info else recipient
+        display_name = contact_info.get("name") if contact_info else recipient
 
-        # Enforce Explicit Confirmation Safeguard
         draft_id = f"WA_{int(time.time()) % 10000:04d}"
         _PENDING_DISPATCH[draft_id] = {
             "recipient": display_name,
@@ -144,30 +130,56 @@ def whatsapp_automation(parameters: dict, player=None, session_memory=None) -> s
             f"To send it, please say 'Confirm send {draft_id}'."
         )
 
-    # 4. Confirm & Dispatch Message
-    elif action in ("confirm_send", "dispatch_message"):
+    # 5. Send / Confirm Dispatch
+    elif action in ("confirm_send", "dispatch_message", "send", "send_message"):
+        # If parameters directly contain recipient and message, allow sending
         did = confirm_code or parameters.get("draft_id")
-        # If no draft id was explicitly spoken, look for most recent pending draft
-        if not did and _PENDING_DISPATCH:
-            did = list(_PENDING_DISPATCH.keys())[-1]
+        target_recipient = ""
+        target_message = ""
 
-        if not did or did not in _PENDING_DISPATCH:
-            return "No pending WhatsApp message draft found to confirm. Please compose your message first."
+        if did and did in _PENDING_DISPATCH:
+            draft = _PENDING_DISPATCH.pop(did)
+            target_recipient = draft["recipient"]
+            target_message = draft["message"]
+        elif not did and _PENDING_DISPATCH:
+            draft = _PENDING_DISPATCH.pop(list(_PENDING_DISPATCH.keys())[-1])
+            target_recipient = draft["recipient"]
+            target_message = draft["message"]
+        elif recipient and message_text:
+            target_recipient = recipient
+            target_message = message_text
+        else:
+            return "No pending WhatsApp message draft found to confirm. Please specify a recipient and message."
 
-        draft = _PENDING_DISPATCH.pop(did)
-        clean_phone = draft["phone"].replace("+", "").replace(" ", "").replace("-", "")
-        encoded_msg = urllib.parse.quote(draft["message"])
-        wa_link = f"https://api.whatsapp.com/send?phone={clean_phone}&text={encoded_msg}"
+        # Execute via Desktop Controller
+        res = controller.send_message(target_recipient, target_message, auto_submit=True)
+        if res.get("verified"):
+            if player and hasattr(player, "write_log"):
+                player.write_log(f"WhatsApp: Dispatched verified message to {res.get('recipient')} via Desktop.")
+            return f"Message sent to {res.get('recipient')}, sir: '{target_message}'."
+        elif res.get("status") == "STAGED_REQUIRES_ENTER":
+            if player and hasattr(player, "write_log"):
+                player.write_log(f"WhatsApp: Message staged in WhatsApp Desktop for {res.get('recipient')}.")
+            return (
+                f"I have staged your message for {res.get('recipient')} in WhatsApp Desktop. "
+                "Press Return in WhatsApp to dispatch, or grant Accessibility permission in macOS Settings."
+            )
+        else:
+            # Fallback to companion gateway
+            clean_phone = str(res.get("phone", "")).replace("+", "").replace(" ", "").replace("-", "")
+            gw.execute_hardware_command("launch_app", {"app_name": f"WhatsApp: {target_recipient}"})
+            return f"Staged WhatsApp message for {target_recipient}: '{target_message}'."
 
-        # Dispatch via Android Companion or link handoff
-        gw.execute_hardware_command("launch_app", {"app_name": f"WhatsApp: {draft['recipient']}"})
+    # 6. Stage Message Only (Without Enter)
+    elif action in ("stage", "stage_message", "open_chat"):
+        if not recipient:
+            return "Please specify a contact or phone number to open in WhatsApp."
+        res = controller.stage_message(recipient, message_text)
+        if res.get("success"):
+            return f"Opened WhatsApp chat for {res.get('recipient')}" + (f" with pre-filled message." if message_text else ".")
+        return f"Could not open WhatsApp chat: {res.get('error', 'unknown error')}"
 
-        if player and hasattr(player, "write_log"):
-            player.write_log(f"WhatsApp: Dispatched message to {draft['recipient']} ({clean_phone}).")
-
-        return f"Message sent to {draft['recipient']}, sir: '{draft['message']}'."
-
-    # 5. WhatsApp Voice Call
+    # 7. WhatsApp Voice Call
     elif action in ("call", "make_call", "whatsapp_call"):
         if not recipient:
             return "Who would you like to call on WhatsApp?"
@@ -177,25 +189,19 @@ def whatsapp_automation(parameters: dict, player=None, session_memory=None) -> s
             return f"I could not verify contact details for '{recipient}'. Please confirm their name or phone number first."
 
         clean_phone = contact_info["phone"].replace("+", "").replace(" ", "").replace("-", "")
-        call_link = f"whatsapp://call?phone={clean_phone}"
+        call_url = f"whatsapp://call?phone={clean_phone}"
 
-        # Dispatch call intent to companion
-        gw.execute_hardware_command("launch_app", {"app_name": f"WhatsApp Call: {contact_info['name']}"})
+        # Open URL scheme to trigger desktop call or companion
+        try:
+            import subprocess
+            subprocess.run(["open", call_url], check=True)
+        except Exception:
+            gw.execute_hardware_command("launch_app", {"app_name": f"WhatsApp Call: {contact_info['name']}"})
 
         if player and hasattr(player, "write_log"):
             player.write_log(f"WhatsApp: Initiating call to {contact_info['name']} ({clean_phone}).")
 
-        return f"Initiating WhatsApp call to {contact_info['name']} on your companion device, sir."
-
-    # 6. Answer Call Hands-Free
-    elif action in ("answer_call", "answer", "accept_call"):
-        gw.execute_hardware_command("launch_app", {"app_name": "WhatsApp Call: Answer"})
-        return "Incoming WhatsApp call answered hands-free, sir."
-
-    # 7. Disconnect / End Call
-    elif action in ("end_call", "disconnect_call", "hangup"):
-        gw.execute_hardware_command("launch_app", {"app_name": "WhatsApp Call: Hangup"})
-        return "WhatsApp call terminated, sir."
+        return f"Initiating WhatsApp call to {contact_info['name']}, sir."
 
     # 8. Hands-Free Driving Mode
     elif action in ("hands_free_mode", "driving_mode", "toggle_hands_free"):
@@ -208,23 +214,23 @@ def whatsapp_automation(parameters: dict, player=None, session_memory=None) -> s
             f"Incoming messages will be announced aloud, and voice confirmations are active."
         )
 
-    return "Supported actions: search_contact | read_unread | compose | confirm_send | call | answer_call | end_call | hands_free_mode"
+    return "Supported actions: status | search_contact | read_unread | compose | send | confirm_send | stage | call | hands_free_mode"
 
 
 TOOL = {
     "name": "whatsapp_automation",
     "description": (
-        "WhatsApp Automation and Hands-Free Driving Mode Tool for JARVIS H3.1. "
-        "Enables voice-driven WhatsApp operations: searching contacts, reading unread messages/notifications aloud, "
-        "composing and sending verified text messages, placing hands-free WhatsApp calls, answering/ending calls, "
-        "and enabling zero-touch driving mode."
+        "WhatsApp Desktop and Mobile Automation for JARVIS H3.3. "
+        "Enables voice-driven WhatsApp operations on macOS: searching contacts, reading unread messages, "
+        "composing and sending verified text messages via native WhatsApp Desktop, opening chats, "
+        "initiating calls, and toggling hands-free driving mode."
     ),
     "parameters": {
         "type": "OBJECT",
         "properties": {
             "action": {
                 "type": "STRING",
-                "description": "search_contact | read_unread | compose | confirm_send | call | answer_call | end_call | hands_free_mode (default: read_unread)"
+                "description": "status | search_contact | read_unread | compose | send | confirm_send | stage | call | hands_free_mode"
             },
             "recipient": {
                 "type": "STRING",

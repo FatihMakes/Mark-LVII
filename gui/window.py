@@ -3181,6 +3181,14 @@ class MainWindow(QMainWindow):
         if self.on_audio_device_change:
             self.on_audio_device_change()
 
+    # ── Library panel ────────────────────────────────────────────────────────
+
+    def _open_library_panel(self):
+        from gui.library_overlay import LibraryOverlay
+        ov = LibraryOverlay(parent=self.centralWidget())
+        self._centre_overlay(ov)
+        self._library_overlay = ov
+
     # ── Memory panel ─────────────────────────────────────────────────────────
 
     def _open_memory_panel(self):
@@ -3221,6 +3229,12 @@ class MainWindow(QMainWindow):
         ov = PrivacyCenterOverlay(parent=self.centralWidget())
         self._centre_overlay(ov)
         self._privacy_overlay = ov
+
+    def _open_diagnostics_panel(self):
+        from gui.diagnostic_panel import DiagnosticOverlay
+        ov = DiagnosticOverlay(parent=self.centralWidget())
+        self._centre_overlay(ov)
+        self._diagnostics_overlay = ov
 
     # ── Irreversible-action confirmation ─────────────────────────────────────
 
@@ -3463,12 +3477,7 @@ class MainWindow(QMainWindow):
         elif action == "news":
             self._send_text("top world news today")
         elif action == "library":
-            reports_dir = CONFIG_DIR.parent / "reports"
-            if reports_dir.exists():
-                files = sorted(reports_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
-                if files:
-                    summary = "\n".join([f"- **{f.stem}**" for f in files[:8]])
-                    self._show_content("LIBRARY — Saved Reports & Documents", f"### Available Research & Reports\n\n{summary}\n\n*(Located in {reports_dir})*")
+            self._open_library_panel()
         elif action == "tasks":
             if hasattr(self, "_context_panel"):
                 self._context_panel.show()
@@ -3491,6 +3500,8 @@ class MainWindow(QMainWindow):
             self._open_plugin_manager()
         elif action == "remote":
             self._open_remote()
+        elif action == "diagnostics":
+            self._open_diagnostics_panel()
 
     def _apply_state(self, state: str):
         state = str(state or "").upper()

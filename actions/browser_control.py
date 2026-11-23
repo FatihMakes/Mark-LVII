@@ -1330,6 +1330,22 @@ def browser_control(
     browser = params.get("browser", "").lower().strip() or None
     result  = _unknown_action(action)
 
+    if action in ("agent", "autonomous", "workflow", "mission"):
+        goal = params.get("goal") or params.get("query") or params.get("task") or ""
+        if not goal:
+            return "Please specify a browsing goal or task for the autonomous agent."
+        from core.browser_agent import get_browser_agent
+        agent = get_browser_agent(headless=False)
+        res = agent.run_task(goal, player=player)
+        if res.get("success"):
+            ret_msg = f"Autonomous browsing mission complete for '{goal}'. Extracted {len(res.get('extracted', {}).get('items', []))} items."
+            _log(player, ret_msg)
+            return ret_msg
+        else:
+            err_msg = f"Browser agent: {res.get('error', 'Task stopped')}"
+            _log(player, err_msg)
+            return err_msg
+
     if action == "switch":
         target = browser or params.get("target", "").lower().strip()
         result = _registry.switch(target) if target else "Please specify a browser."

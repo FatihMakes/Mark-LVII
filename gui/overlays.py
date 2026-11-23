@@ -512,8 +512,14 @@ class PluginManagerOverlay(QWidget):
 
     _OW = 490
 
-    def __init__(self, plugins: list[dict], parent=None):
+    def __init__(self, plugins: list[dict] = None, parent=None):
         super().__init__(parent)
+        if plugins is None:
+            try:
+                from core.plugin_loader import discover_plugins
+                plugins = discover_plugins()
+            except Exception:
+                plugins = []
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             PluginManagerOverlay {{
@@ -2084,12 +2090,23 @@ class IdentityAuthOverlay(_HudOverlay):
         card_lay.addWidget(det_lbl)
         self._lay.addWidget(card)
 
-        # Active Session Security
+        # Active Session Security & Live Diagnostics
         sess_box = QFrame()
         sess_box.setStyleSheet(f"background: {C.PANEL}; border: 1px solid {C.BORDER}; border-radius: 6px; padding: 6px;")
         sess_lay = QVBoxLayout(sess_box)
         sess_lay.setContentsMargins(8, 6, 8, 6)
-        sess_lay.setSpacing(3)
+        sess_lay.setSpacing(4)
+
+        try:
+            from core.owner_session import get_session_manager
+            sm = get_session_manager()
+            s_active = sm.is_active()
+            s_rem = sm.remaining_seconds() if s_active else 0
+            s_status_str = f"ACTIVE ({int(s_rem)}s remaining)" if s_active else "STANDBY (Expires in 15m on activation)"
+            s_col = C.GREEN if s_active else C.ACC
+        except Exception:
+            s_status_str = "STANDBY"
+            s_col = C.TEXT_DIM
 
         s_row = QHBoxLayout()
         s_title = QLabel(f"Current Turn Speaker: {curr_speaker}")
@@ -2097,9 +2114,18 @@ class IdentityAuthOverlay(_HudOverlay):
         s_title.setStyleSheet(f"color: {C.PRI if curr_speaker == 'OWNER' else C.TEXT}; background: transparent;")
         s_row.addWidget(s_title)
         s_row.addStretch()
+        
+        diag_lbl = QLabel(f"Session: {s_status_str}")
+        diag_lbl.setFont(px_font(9, QFont.Weight.Bold, mono=True))
+        diag_lbl.setStyleSheet(f"color: {s_col}; background: transparent;")
+        s_row.addWidget(diag_lbl)
         sess_lay.addLayout(s_row)
 
-        rule_desc = "Session Mode: Full Autonomous Access (Owner)" if curr_speaker == "OWNER" else "Session Mode: Scoped Guest Access (Private memory shielded, dangerous tools blocked)"
+        rule_desc = (
+            "Security Policy: Dynamic Owner Recognition · Full Access Granted"
+            if curr_speaker == "OWNER"
+            else "Security Policy: Guest Scoped Sandbox · Memory & Elevated Tools Shielded"
+        )
         r_lbl = QLabel(rule_desc)
         r_lbl.setFont(px_font(9))
         r_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")

@@ -68,7 +68,7 @@ class OwnerSessionManager:
 
     def __init__(self):
         self._session: Optional[OwnerSessionState] = None
-        self._owner_name = "Aman Kumar"
+        self._owner_name = self._resolve_initial_owner_name()
         self._salt: str = ""
         self._pin_hash: str = ""
         self._failed_pin_attempts: int = 0
@@ -76,6 +76,49 @@ class OwnerSessionManager:
         self._ensure_storage()
         self._load_credentials()
         self._restore_session()
+
+    @staticmethod
+    def _resolve_initial_owner_name() -> str:
+        # Priority 1: Enrolled profile from ~/.jarvis_voiceprint.json or memory/owner_identity.json
+        try:
+            vp_file = Path.home() / ".jarvis_voiceprint.json"
+            if vp_file.is_file():
+                data = json.loads(vp_file.read_text(encoding="utf-8"))
+                if data.get("owner"):
+                    return str(data["owner"])
+        except Exception:
+            pass
+
+        try:
+            id_file = MEMORY_DIR / "owner_identity.json"
+            if id_file.is_file():
+                data = json.loads(id_file.read_text(encoding="utf-8"))
+                if data.get("owner_name"):
+                    return str(data["owner_name"])
+        except Exception:
+            pass
+
+        # Priority 2: memory/long_term.json
+        try:
+            lt_file = MEMORY_DIR / "long_term.json"
+            if lt_file.is_file():
+                data = json.loads(lt_file.read_text(encoding="utf-8"))
+                val = data.get("identity", {}).get("name", {}).get("value")
+                if val:
+                    return str(val)
+        except Exception:
+            pass
+
+        # Priority 3: macOS user name
+        return os.getenv("USER", "Owner").capitalize()
+
+    @property
+    def owner_name(self) -> str:
+        # Dynamically refresh if enrolled profile has been updated
+        dyn = self._resolve_initial_owner_name()
+        if dyn:
+            self._owner_name = dyn
+        return self._owner_name
 
     def _ensure_storage(self) -> None:
         MEMORY_DIR.mkdir(parents=True, exist_ok=True)
@@ -217,6 +260,15 @@ class OwnerSessionManager:
             return True
         return False
 
+    def is_active(self) -> bool:
+        return self.is_owner_session_active()
+
+    def remaining_seconds(self) -> float:
+        if self._session and self._session.is_valid:
+            exp = self._session.last_activity_at + self._session.ttl_seconds
+            return max(0.0, exp - time.time())
+        return 0.0
+
     def get_current_session(self) -> Optional[OwnerSessionState]:
         if self.is_owner_session_active():
             return self._session
@@ -278,3 +330,6 @@ def get_owner_session() -> OwnerSessionManager:
 
 def is_owner_authenticated() -> bool:
     return _owner_session_manager.is_owner_session_active()
+
+
+get_session_manager = get_owner_session

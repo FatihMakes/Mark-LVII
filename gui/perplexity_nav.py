@@ -290,6 +290,10 @@ class PerplexitySidebar(QWidget):
         sep2.setStyleSheet(f"background: {C.BORDER}; border: none; margin: 4px 0;")
         root.addWidget(sep2)
 
+        self._btn_diagnostics = NavItemButton("⚡", "System Diagnostics")
+        self._btn_diagnostics.clicked.connect(lambda: self.settings_action.emit("diagnostics"))
+        root.addWidget(self._btn_diagnostics)
+
         self._btn_settings = NavItemButton("⚙", "Settings")
         self._btn_settings.clicked.connect(lambda: self.settings_action.emit("settings"))
         root.addWidget(self._btn_settings)
@@ -300,7 +304,7 @@ class PerplexitySidebar(QWidget):
             self._btn_news, self._btn_library, self._btn_tasks,
             self._btn_memory, self._btn_identity, self._btn_voice_lab,
             self._btn_speakers, self._btn_local_ai, self._btn_companion, self._btn_privacy,
-            self._btn_plugins, self._btn_remote, self._btn_settings
+            self._btn_plugins, self._btn_remote, self._btn_diagnostics, self._btn_settings
         ]
         self._select_mode(0)
 

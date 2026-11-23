@@ -110,6 +110,8 @@ def synthesize_content_if_needed(content: str, query: str = "") -> str:
         )
         resp = gemini.text(gen_prompt, tier=gemini.FAST, timeout_ms=30000)
         if resp and len(resp.strip()) > 150:
+            if prompt_subject.lower() not in resp.lower():
+                return f"# {prompt_subject}\n\n{resp}"
             return resp
     except Exception as e:
         logger.debug(f"Gemini synthesis unavailable: {e}")
