@@ -1317,6 +1317,11 @@ class JarvisLive:
     def set_speaking(self, value: bool):
         with self._speaking_lock:
             self._is_speaking = value
+        try:
+            from core.speaker_intelligence import get_speaker_engine
+            get_speaker_engine().set_tts_playback_active(value)
+        except Exception:
+            pass
         if value:
             self._tail_until = 0.0
         else:
@@ -1941,8 +1946,18 @@ class JarvisLive:
                         self._voice_match_buf.append(indata.copy())
                         if len(self._voice_match_buf) >= 8:
                             full_speech = np.concatenate(list(self._voice_match_buf))
-                            match, score, _ = voice_verifier.verify_speaker(full_speech, SEND_SAMPLE_RATE)
                             self._voice_match_buf.popleft()
+                            # H3.1 Multi-Speaker Intelligence, Overlap & Background Voice Isolation
+                            try:
+                                from core.speaker_intelligence import get_speaker_engine
+                                diar_res = get_speaker_engine().process_speech_turn(full_speech, SEND_SAMPLE_RATE)
+                                if not diar_res.actionable_speech:
+                                    if diar_res.is_overlapping and hasattr(self.ui, "write_log"):
+                                        self.ui.write_log("SYS: Multiple speakers detected. Please repeat your command.")
+                                    return
+                            except Exception:
+                                pass
+                            match, score, _ = voice_verifier.verify_speaker(full_speech, SEND_SAMPLE_RATE)
                             try:
                                 from core.permissions import set_current_speaker, UserRole
                                 set_current_speaker(UserRole.OWNER if match else UserRole.TEMPORARY_GUEST)

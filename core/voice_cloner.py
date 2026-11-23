@@ -25,8 +25,43 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-import scipy.io.wavfile as wavfile
-import scipy.signal as signal
+
+try:
+    import scipy.io.wavfile as wavfile
+    import scipy.signal as signal
+    HAVE_SCIPY = True
+except ImportError:
+    wavfile = None
+    signal = None
+    HAVE_SCIPY = False
+
+def _load_wav(audio_path) -> Tuple[int, np.ndarray]:
+    if HAVE_SCIPY and wavfile is not None:
+        return wavfile.read(str(audio_path))
+    with wave.open(str(audio_path), "rb") as wf:
+        sr = wf.getframerate()
+        n_channels = wf.getnchannels()
+        sampwidth = wf.getsampwidth()
+        frames = wf.readframes(wf.getnframes())
+        if sampwidth == 2:
+            data = np.frombuffer(frames, dtype=np.int16)
+        elif sampwidth == 4:
+            data = np.frombuffer(frames, dtype=np.int32)
+        else:
+            data = np.frombuffer(frames, dtype=np.uint8).astype(np.int16) - 128
+        if n_channels > 1:
+            data = data.reshape(-1, n_channels)
+        return sr, data
+
+def _save_wav(output_file, sr: int, data_int16: np.ndarray) -> None:
+    if HAVE_SCIPY and wavfile is not None:
+        wavfile.write(str(output_file), sr, data_int16)
+        return
+    with wave.open(str(output_file), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sr)
+        wf.writeframes(data_int16.tobytes())
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 MEMORY_DIR = BASE_DIR / "memory"
@@ -89,7 +124,7 @@ def analyze_audio_quality(audio_path_or_data: Path | np.ndarray, sample_rate: in
         if not audio_path.is_file():
             return {"viable": False, "score": 0, "error": f"Audio file not found: {audio_path}"}
         try:
-            sr, raw = wavfile.read(str(audio_path))
+            sr, raw = _load_wav(audio_path)
         except Exception as e:
             return {"viable": False, "score": 0, "error": f"Unsupported audio file format: {e}"}
 
@@ -208,7 +243,7 @@ def clean_audio_sample(
     else:
         output_file = Path(output_path_or_sr) if output_path_or_sr else Path(str(input_sample) + ".clean.wav")
         output_file.parent.mkdir(parents=True, exist_ok=True)
-        sr, raw = wavfile.read(str(input_sample))
+        sr, raw = _load_wav(str(input_sample))
 
     if raw.ndim > 1:
         raw = np.mean(raw, axis=1)
@@ -219,16 +254,20 @@ def clean_audio_sample(
         signal_data = raw.astype(np.float32)
 
     # 1. Bandpass filter
-    nyq = max(200.0, float(sr // 2) - 100.0)
-    high_cut = min(nyq, 11500.0)
-    low_cut = min(70.0, high_cut - 10.0)
-    sos = signal.butter(4, [low_cut, high_cut], btype="bandpass", fs=sr, output="sos")
-    filtered = signal.sosfilt(sos, signal_data)
+    if HAVE_SCIPY and signal is not None:
+        nyq = max(200.0, float(sr // 2) - 100.0)
+        high_cut = min(nyq, 11500.0)
+        low_cut = min(70.0, high_cut - 10.0)
+        sos = signal.butter(4, [low_cut, high_cut], btype="bandpass", fs=sr, output="sos")
+        filtered = signal.sosfilt(sos, signal_data)
+    else:
+        filtered = signal_data
 
     # 2. Resample if needed
     if output_file and sr != target_sr:
-        num_samples = int(len(filtered) * float(target_sr) / float(sr))
-        filtered = signal.resample(filtered, num_samples)
+        if HAVE_SCIPY and signal is not None:
+            num_samples = int(len(filtered) * float(target_sr) / float(sr))
+            filtered = signal.resample(filtered, num_samples)
         sr = target_sr
 
     # 3. Peak normalization to -1.0 dBFS
@@ -238,7 +277,7 @@ def clean_audio_sample(
 
     int16_out = (filtered * 32767.0).astype(np.int16)
     if output_file:
-        wavfile.write(str(output_file), sr, int16_out)
+        _save_wav(output_file, sr, int16_out)
         return output_file
     return int16_out
 

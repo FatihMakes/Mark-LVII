@@ -77,12 +77,16 @@ from gui.overlays import (
     ConfirmBanner,
     CustomizeOverlay,
     IdentityAuthOverlay,
+    LocalAIModelOverlay,
     MemoryOverlay,
+    MultiSpeakerOverlay,
     PluginManagerOverlay,
     PluginSettingsOverlay,
+    PrivacyCenterOverlay,
     RemoteKeyOverlay,
     SetupOverlay,
     VoiceLabOverlay,
+    CompanionOverlay,
 )
 from gui.providers_panel import (
     ProvidersOverlay,
@@ -126,6 +130,10 @@ class MainWindow(QMainWindow):
     _review_sig     = pyqtSignal(str, str, object, object)  # document review payload
     _identity_sig   = pyqtSignal()           # thread-safe open Identity & Auth overlay
     _voice_lab_sig  = pyqtSignal()           # thread-safe open Voice Lab overlay
+    _speakers_sig   = pyqtSignal()           # thread-safe open Multi-Speaker overlay
+    _local_ai_sig   = pyqtSignal()           # thread-safe open Local AI Model Engine overlay
+    _companion_sig  = pyqtSignal()           # thread-safe open Android Gateway overlay
+    _privacy_sig    = pyqtSignal()           # thread-safe open Privacy Center overlay
 
     def __init__(self, face_path: str):
         super().__init__()
@@ -476,6 +484,10 @@ class MainWindow(QMainWindow):
         self._review_sig.connect(self._show_review)
         self._identity_sig.connect(self._open_identity_panel)
         self._voice_lab_sig.connect(self._open_voice_lab_panel)
+        self._speakers_sig.connect(self._open_speakers_panel)
+        self._local_ai_sig.connect(self._open_local_ai_panel)
+        self._companion_sig.connect(self._open_companion_panel)
+        self._privacy_sig.connect(self._open_privacy_panel)
         self._cam_stop = threading.Event()
 
         # Camera preview overlay (child of central widget, positioned in resizeEvent)
@@ -3172,6 +3184,28 @@ class MainWindow(QMainWindow):
         self._centre_overlay(ov)
         self._voice_lab_overlay = ov
 
+    # ── H3.1 Advanced Voice, Local AI, Companion & Privacy panels ────────────
+
+    def _open_speakers_panel(self):
+        ov = MultiSpeakerOverlay(parent=self.centralWidget())
+        self._centre_overlay(ov)
+        self._speakers_overlay = ov
+
+    def _open_local_ai_panel(self):
+        ov = LocalAIModelOverlay(parent=self.centralWidget())
+        self._centre_overlay(ov)
+        self._local_ai_overlay = ov
+
+    def _open_companion_panel(self):
+        ov = CompanionOverlay(parent=self.centralWidget())
+        self._centre_overlay(ov)
+        self._companion_overlay = ov
+
+    def _open_privacy_panel(self):
+        ov = PrivacyCenterOverlay(parent=self.centralWidget())
+        self._centre_overlay(ov)
+        self._privacy_overlay = ov
+
     # ── Irreversible-action confirmation ─────────────────────────────────────
 
     def _show_confirm_banner(self, title: str, detail: str):
@@ -3429,6 +3463,14 @@ class MainWindow(QMainWindow):
             self._open_identity_panel()
         elif action == "voice_lab":
             self._open_voice_lab_panel()
+        elif action == "speakers":
+            self._open_speakers_panel()
+        elif action == "local_ai":
+            self._open_local_ai_panel()
+        elif action == "companion":
+            self._open_companion_panel()
+        elif action == "privacy":
+            self._open_privacy_panel()
         elif action == "plugins":
             self._open_plugin_manager()
         elif action == "remote":

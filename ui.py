@@ -318,6 +318,22 @@ class JarvisUI:
         """Thread-safe: open the Voice Lab & Voice Cloning overlay."""
         self._win._voice_lab_sig.emit()
 
+    def show_speakers(self) -> None:
+        """Thread-safe: open the Multi-Speaker Intelligence & Speaker Lock overlay."""
+        self._win._speakers_sig.emit()
+
+    def show_local_ai(self) -> None:
+        """Thread-safe: open the Local AI Uncensored Model Engine overlay."""
+        self._win._local_ai_sig.emit()
+
+    def show_companion(self) -> None:
+        """Thread-safe: open the Android Companion & Hardware Gateway overlay."""
+        self._win._companion_sig.emit()
+
+    def show_privacy(self) -> None:
+        """Thread-safe: open the Privacy Center & Kill Switch overlay."""
+        self._win._privacy_sig.emit()
+
     def show_camera_frame(self, img_bytes: bytes):
         """Thread-safe: show a webcam frame in the small overlay (screen captures)."""
         self._win._camera_sig.emit(img_bytes)
