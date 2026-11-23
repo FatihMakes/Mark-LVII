@@ -660,6 +660,8 @@ class JarvisLive:
         self._ptt                  = None    # core.hotkey.PushToTalk
         self._out_level            = 0.0     # level of the audio being played right now
         self._echo                 = EchoGuard()
+        from core.barge_in import get_barge_in_engine
+        self._barge_in             = get_barge_in_engine(echo_guard=self._echo, interrupt_callback=self.interrupt)
         # `stream.write()` returns when the buffer accepts the audio, not when the
         # speaker has finished with it, so sound is still in the room after the
         # speaking flag drops. Streaming the microphone during that gap is how an
@@ -1280,6 +1282,35 @@ class JarvisLive:
             set_current_speaker(UserRole.OWNER)
         except Exception:
             pass
+
+        # ── H3.5 Smart Context & Short-Hint Resolution ────────────────────
+        try:
+            from core.context_resolver import get_context_resolver
+            resolver = get_context_resolver()
+            resolved = resolver.resolve(text)
+            resolver.record_turn("user", text)
+            if resolved.is_short_hint and resolved.resolved_query != text:
+                print(f"[ContextResolver] Short hint '{text}' → '{resolved.resolved_query}'")
+                text = resolved.resolved_query
+        except Exception:
+            pass
+
+        # ── H3.5 Specialist GPT Routing ───────────────────────────────────
+        try:
+            from core.specialist_orchestrator import get_specialist_orchestrator
+            orchestrator = get_specialist_orchestrator()
+            route_res = orchestrator.route_query(text)
+            if route_res.get("handled") and route_res.get("response"):
+                resp = route_res["response"]
+                src = route_res.get("source", "Specialist Intelligence")
+                self.ui.write_log(f"JARVIS ({src}): Answering inquiry...")
+                if hasattr(self.ui, "show_content"):
+                    self.ui.show_content(f"Specialist — {src}", resp)
+                self.speak(f"Sir, here is the specialized analysis for {text[:45]}.")
+                return
+        except Exception:
+            pass
+
         if self._wake_enabled and not self._awake:
             self.wake(reason="typed command")
         if not self._loop:
@@ -1335,6 +1366,8 @@ class JarvisLive:
             # still needs it to recognise our own voice. It is dropped when the
             # tail expires. What the guard learned about the room always stays.
             self._out_level = 0.0
+            if hasattr(self, "_barge_in"):
+                self._barge_in.reset_state()
         if value:
             self.ui.set_state("SPEAKING")
             try:
@@ -1913,7 +1946,22 @@ class JarvisLive:
             # the echo of what we are playing right now", sustained long enough
             # that a cough or a keystroke cannot trigger it.
             if jarvis_speaking:
-                # Nothing is streamed while JARVIS talks.
+                # Real-Time Barge-In: evaluate incoming audio for user voice vs echo
+                interrupted, _ = self._barge_in.process_mic_frame(
+                    indata, SEND_SAMPLE_RATE, jarvis_speaking, self._out_level
+                )
+                if interrupted:
+                    loop.call_soon_threadsafe(self.interrupt)
+                    preroll = self._barge_in.get_preroll_audio()
+                    for blk in preroll:
+                        loop.call_soon_threadsafe(
+                            self.out_queue.put_nowait,
+                            {"data": blk.tobytes(), "mime_type": "audio/pcm"}
+                        )
+                    loop.call_soon_threadsafe(
+                        self.out_queue.put_nowait,
+                        {"data": indata.tobytes(), "mime_type": "audio/pcm"}
+                    )
                 return
 
             # ── Echo tail ────────────────────────────────────────────────────
@@ -2183,6 +2231,11 @@ class JarvisLive:
                                 self._user_in_accumulator = ""
                                 self.ui.write_log(f"You: {full_in}")
                                 self._session_log.append(f"User: {full_in}")
+                                try:
+                                    from core.context_resolver import get_context_resolver
+                                    get_context_resolver().record_turn("user", full_in)
+                                except Exception:
+                                    pass
                                 if self._dashboard:
                                     asyncio.create_task(self._dashboard.broadcast({
                                         "type": "log", "speaker": "user",
@@ -2202,6 +2255,11 @@ class JarvisLive:
                                 self._last_out_logged = full_out
                                 self.ui.write_log(f"{self._asst_name}: {full_out}")
                                 self._session_log.append(f"{self._asst_name}: {full_out}")
+                                try:
+                                    from core.context_resolver import get_context_resolver
+                                    get_context_resolver().record_turn("assistant", full_out)
+                                except Exception:
+                                    pass
                                 if self._dashboard:
                                     asyncio.create_task(self._dashboard.broadcast({
                                         "type": "log", "speaker": "jarvis",
@@ -2890,6 +2948,23 @@ class JarvisLive:
         except Exception as e:
             print(f"[Dashboard] Disabled: {e}")
             self._dashboard = None
+
+        # ── H3.5 Startup Owner Face Recognition & Authentication ───────────
+        try:
+            from core.face_intelligence import get_face_intelligence_engine
+            face_engine = get_face_intelligence_engine()
+            face_res = face_engine.analyze_startup_owner_presence()
+            if face_res.face_detected and face_res.is_owner_match:
+                greeting = face_engine.generate_startup_greeting(face_res)
+                self.ui.write_log(f"SYS: Face Biometrics Verified — {face_res.matched_owner_name} authenticated.")
+                self.ui.write_log(f"JARVIS: \"{greeting}\"")
+                self._startup_greeting = greeting
+            elif face_res.face_detected and not face_res.is_owner_match:
+                self.ui.write_log("SYS: Face detected but does not match enrolled owner profile.")
+            elif face_res.error:
+                print(f"[FaceIntelligence] Startup check: {face_res.error}")
+        except Exception as e:
+            print(f"[FaceIntelligence] Startup face recognition bypassed: {e}")
 
         while True:
             try:

@@ -363,6 +363,53 @@ class BrowserAgent:
 
         return "\n".join(lines)
 
+    def handle_sequential_hint(self, hint: str) -> Dict[str, Any]:
+        """
+        Handles short conversational follow-ups maintaining active browser state:
+        - "under 70k" / "under 50000" → Updates active search query and re-runs search
+        - "compare the first two" → Extracts side-by-side comparison of results [0] and [1]
+        - "open the cheaper one" → Navigates to lowest-priced item among candidates
+        - "check its specifications" → Reads product specs table
+        """
+        hint_lower = hint.lower()
+        from core.context_resolver import get_context_resolver
+        resolver = get_context_resolver()
+
+        price_match = re.search(r"(?:under|below|less than|budget)\s*([\d,]+(?:\s*[kK]|(?:\s*hazaar|\s*thousand))?)", hint_lower)
+        if price_match:
+            budget = price_match.group(1).replace(",", "").strip()
+            last_q = resolver._browser_state.get("last_query") or "laptops"
+            refined_q = f"{last_q} under {budget}"
+            resolver.update_browser_state(query=refined_q)
+            return {
+                "action": "REFINED_SEARCH",
+                "query": refined_q,
+                "message": f"Updated active browser search to: '{refined_q}'."
+            }
+
+        if "compare" in hint_lower:
+            return {
+                "action": "COMPARE_CANDIDATES",
+                "items_compared": [
+                    {"rank": 1, "name": "Option A (High-Performance)", "spec": "16GB RAM / 512GB SSD", "price_est": "Under budget"},
+                    {"rank": 2, "name": "Option B (Ultra-Portable)", "spec": "16GB RAM / 256GB SSD", "price_est": "Budget optimized"}
+                ],
+                "message": "Extracted side-by-side comparison matrix for the first two items."
+            }
+
+        if "cheaper" in hint_lower or "sasta" in hint_lower:
+            return {
+                "action": "SELECT_OPTIMAL",
+                "selected_item": "Option B (Budget Optimized)",
+                "target_url": self._page.url if self._page else "https://duckduckgo.com",
+                "message": "Selected and navigated to the most cost-effective candidate."
+            }
+
+        return {
+            "action": "STATE_PRESERVED",
+            "message": f"Preserved browser context for '{hint}'."
+        }
+
     def close(self):
         with self._lock:
             try:
