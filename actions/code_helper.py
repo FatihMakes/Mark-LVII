@@ -40,9 +40,12 @@ def _get_gemini(tier: str = gemini.SMART):
 
 
 def _clean_code(text: str) -> str:
-    text = text.strip()
-    text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
-    text = re.sub(r"\n?```$", "", text)
+    text = (text or "").strip()
+    m = re.search(r"```(?:[a-zA-Z]+)?\r?\n([\s\S]*?)\r?\n```", text)
+    if m:
+        return m.group(1).strip()
+    text = re.sub(r"^```[a-zA-Z]*\r?\n?", "", text)
+    text = re.sub(r"\r?\n?```$", "", text)
     return text.strip()
 
 

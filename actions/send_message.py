@@ -28,14 +28,20 @@ def _base_dir() -> Path:
         return Path(sys.executable).parent
     return Path(__file__).resolve().parent.parent
 
+def _platform_os() -> str:
+    import platform
+    return {"Windows": "windows", "Darwin": "mac", "Linux": "linux"}.get(
+        platform.system(), "linux"
+    )
+
 def _get_os() -> str:
     try:
         cfg = json.loads(
             (_base_dir() / "config" / "api_keys.json").read_text(encoding="utf-8")
         )
-        return cfg.get("os_system", "windows").lower()
+        return cfg.get("os_system", _platform_os()).lower()
     except Exception:
-        return "windows"
+        return _platform_os()
 
 
 def _require_pyautogui():

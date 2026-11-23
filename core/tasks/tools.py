@@ -168,6 +168,8 @@ class TaskTools:
                 if not args.get("file_path"):
                     return outcome.failed(name, "file_path is required")
                 args["file_path"] = str(_inside(self.workdir, args["file_path"]))
+                if args.get("destination"):
+                    args["destination"] = str(_inside(self.workdir, args["destination"]))
             result = str(_call_handler(self._action(name)["handler"], args, {}) or "Done.")
             if "<<<UNTRUSTED" not in result and name in ("file_processor", "web_search"):
                 result = outcome.untrusted("file" if name == "file_processor" else "web", result)

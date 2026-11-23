@@ -96,8 +96,13 @@ def _gemini_search(query: str) -> str:
         _note_gemini_error(e)
         raise
 
+    candidates = getattr(response, "candidates", None)
+    first_candidate = candidates[0] if candidates else None
+    content = getattr(first_candidate, "content", None)
+    parts = getattr(content, "parts", None) or []
+
     text = ""
-    for part in response.candidates[0].content.parts:
+    for part in parts:
         if hasattr(part, "text") and part.text:
             text += part.text
 

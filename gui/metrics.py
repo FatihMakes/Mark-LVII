@@ -121,13 +121,14 @@ class _SysMetrics:
         nc  = psutil.net_io_counters()
         now = time.time()
         dt  = now - self._last_net_t
-        if dt > 0:
+        if dt > 0 and nc is not None and self._last_net is not None:
             sent = (nc.bytes_sent - self._last_net.bytes_sent) / dt
             recv = (nc.bytes_recv - self._last_net.bytes_recv) / dt
             net  = (sent + recv) / (1024 * 1024)
         else:
             net = 0.0
-        self._last_net   = nc
+        if nc is not None:
+            self._last_net = nc
         self._last_net_t = now
 
         # GPU and temperature change slowly and are the most expensive probes

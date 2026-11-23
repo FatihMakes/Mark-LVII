@@ -78,11 +78,14 @@ def next_fire(rule: dict, after: datetime) -> datetime | None:
         step = max(5, int(rule["minutes"]))
         sh, sm = parse_hhmm(rule.get("start") or "00:00")
         eh, em = parse_hhmm(rule.get("end") or "23:59")
-        for i in range(8):
+        overnight = (sh, sm) > (eh, em)
+        start_day = -1 if overnight else 0
+        for i in range(start_day, 8):
             base = (after + timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
             if base.isoweekday() not in days:
                 continue
-            start, end = base.replace(hour=sh, minute=sm), base.replace(hour=eh, minute=em)
+            start = base.replace(hour=sh, minute=sm)
+            end = (base + timedelta(days=1)).replace(hour=eh, minute=em) if overnight else base.replace(hour=eh, minute=em)
             cand = start
             if after >= start:
                 done = int((after - start).total_seconds() // (step * 60)) + 1

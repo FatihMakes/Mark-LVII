@@ -9,6 +9,10 @@ import threading
 from pathlib import Path
 from datetime import datetime
 
+_BASE = Path(__file__).resolve().parent.parent
+if str(_BASE) not in sys.path:
+    sys.path.insert(0, str(_BASE))
+
 from config import get_os, is_windows, is_mac, is_linux
 
 _CNW: dict = (
