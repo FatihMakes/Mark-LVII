@@ -54,6 +54,16 @@ def generate_image(prompt: str, width: int = 1024, height: int = 1024, filename:
             except Exception:
                 pass
 
+        try:
+            from core.file_tracker import get_file_tracker
+            get_file_tracker().register_file(
+                path=dest,
+                action="image_generated",
+                description=f"Generated image: {clean_prompt[:50]}"
+            )
+        except Exception:
+            pass
+
         return f"🎨 Generated image for '{clean_prompt}' saved to `{dest}` and opened in preview."
     except Exception as e:
         return f"Image generation failed: {e}"

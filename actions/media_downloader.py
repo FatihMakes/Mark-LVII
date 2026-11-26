@@ -122,6 +122,15 @@ def media_downloader(parameters: dict, player=None) -> str:
                 story.append(Spacer(1, 4))
 
             doc.build(story)
+            try:
+                from core.file_tracker import get_file_tracker
+                get_file_tracker().register_file(
+                    path=dest_pdf,
+                    action="pdf_generated",
+                    description=f"YouTube Video Notes: {title}"
+                )
+            except Exception:
+                pass
 
             if player and hasattr(player, "show_content"):
                 preview = f"### {title}\n- **PDF Saved:** `{dest_pdf}`\n\n```\n{transcript_text[:1500]}\n...[truncated]\n```"
@@ -150,6 +159,16 @@ def media_downloader(parameters: dict, player=None) -> str:
                 info = ydl.extract_info(url, download=True)
                 downloaded_file = ydl.prepare_filename(info)
                 file_name = Path(downloaded_file).name
+
+            try:
+                from core.file_tracker import get_file_tracker
+                get_file_tracker().register_file(
+                    path=downloaded_file,
+                    action="video_downloaded",
+                    description=f"Downloaded video: {file_name}"
+                )
+            except Exception:
+                pass
 
             if player and hasattr(player, "show_content"):
                 player.show_content(f"Downloaded: {file_name}", f"### File Saved\n- Location: `{downloaded_file}`\n- Source: {url}")
@@ -180,7 +199,17 @@ def media_downloader(parameters: dict, player=None) -> str:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
                 downloaded_file = ydl.prepare_filename(info)
-                file_name = Path(downloaded_file).with_suffix(".mp3").name
+                audio_path = Path(downloaded_file).with_suffix(".mp3")
+                file_name = audio_path.name
+                try:
+                    from core.file_tracker import get_file_tracker
+                    get_file_tracker().register_file(
+                        path=audio_path,
+                        action="audio_downloaded",
+                        description=f"Extracted audio: {file_name}"
+                    )
+                except Exception:
+                    pass
 
             return f"I have extracted the audio to '{file_name}' in your Downloads folder, sir."
         except Exception as e:

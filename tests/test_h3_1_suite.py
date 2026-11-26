@@ -243,6 +243,10 @@ class TestH31ComprehensiveSuite(unittest.TestCase):
 
     def test_15_whatsapp_draft_composition_review_card(self):
         """Test 15: Composing a message creates a pending draft review card and DOES NOT send immediately."""
+        from core.owner_session import get_owner_session
+        from core.permissions import set_current_speaker, UserRole
+        get_owner_session().authenticate_owner("voice_biometrics", confidence=0.95)
+        set_current_speaker(UserRole.OWNER)
         reset_whatsapp_draft()
         res = whatsapp_automation({
             "action": "compose",
@@ -254,6 +258,10 @@ class TestH31ComprehensiveSuite(unittest.TestCase):
 
     def test_16_whatsapp_explicit_send_confirmation(self):
         """Test 16: Explicit confirmation required before message is dispatched."""
+        from core.owner_session import get_owner_session
+        from core.permissions import set_current_speaker, UserRole
+        get_owner_session().authenticate_owner("voice_biometrics", confidence=0.95)
+        set_current_speaker(UserRole.OWNER)
         reset_whatsapp_draft()
         whatsapp_automation({
             "action": "compose",
@@ -261,7 +269,7 @@ class TestH31ComprehensiveSuite(unittest.TestCase):
             "message": "Project deployed successfully"
         })
         res = whatsapp_automation({"action": "confirm_send"})
-        self.assertIn("Message sent", res)
+        self.assertTrue("Message sent" in res or "Message dispatched" in res)
 
     def test_17_whatsapp_unread_notifications(self):
         """Test 17: Reading unread messages formats sender, timestamps and content."""

@@ -349,6 +349,19 @@ def generate_pdf(
         except Exception as e:
             logger.debug(f"Could not open Preview: {e}")
 
+    # Track in persistent file registry
+    try:
+        from core.file_tracker import get_file_tracker
+        get_file_tracker().register_file(
+            path=dest,
+            action="pdf_generated",
+            description=f"Generated PDF: {title}",
+            size_bytes=val.get("file_size", 0),
+            metadata={"title": title, "pages": val.get("pages", 1)}
+        )
+    except Exception as e:
+        logger.debug(f"Could not register file in tracker: {e}")
+
     return {
         "status": "success",
         "path": str(dest),

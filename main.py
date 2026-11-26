@@ -594,8 +594,11 @@ class _ReconnectSignal(Exception):
 
 def _is_reconnect_signal(exc: BaseException) -> bool:
     """True if `exc` is a _ReconnectSignal, or a(n) (Base)ExceptionGroup that
-    wraps one — TaskGroup bundles child exceptions into a group."""
+    wraps one, or a server connection closure/GoAway signal."""
     if isinstance(exc, _ReconnectSignal):
+        return True
+    exc_str = str(exc).lower()
+    if "goaway" in exc_str or "1008" in exc_str or "connection aborted" in exc_str:
         return True
     if isinstance(exc, BaseExceptionGroup):
         return any(_is_reconnect_signal(sub) for sub in exc.exceptions)
@@ -1142,15 +1145,21 @@ class JarvisLive:
 
     async def _watch_stall(self) -> None:
         """Rebuild the session when a sent turn goes unanswered past the limit.
-
-        The reconnect keeps the resumption handle, so the conversation survives:
-        this costs a couple of seconds and a line in the log, where before it
-        cost the rest of the session with no indication anything was wrong.
-        """
+        Also resets stuck 'THINKING' state if no speech or tool is running after 12s."""
         while True:
-            await asyncio.sleep(2)
+            await asyncio.sleep(1.5)
+            now = time.monotonic()
+            # If UI is in THINKING state for too long without speaking or queued audio:
+            if getattr(self.ui, "_state", None) == "THINKING" and not self._is_speaking and self.audio_in_queue.empty():
+                last_speech = getattr(self, "_last_user_speech", 0.0)
+                if last_speech > 0 and (now - last_speech > 12.0):
+                    if not self.ui.muted:
+                        print("[JARVIS] ⏱️ Thinking state timed out without audio — resetting to LISTENING")
+                        self.ui.set_state("LISTENING")
+                    self._last_user_speech = 0.0
+
             deadline = self._rx_deadline
-            if deadline is None or time.monotonic() < deadline:
+            if deadline is None or now < deadline:
                 continue
             self._clear_stall()
             print(f"[JARVIS] ⚠️  No response for {_STALL_LIMIT:.0f}s — "
@@ -1902,19 +1911,25 @@ class JarvisLive:
         )
 
     async def _send_realtime(self):
-        while True:
-            msg = await self.out_queue.get()
-            # Gemini 3.x Live rejects the old realtime_input.media_chunks field
-            # (what `media=...` maps to) and closes the socket with a 1007. Send
-            # mic / phone PCM through the new `audio` field instead. Queue items
-            # are {"data": <bytes>, "mime_type": <str>} from _listen_audio and
-            # the phone relay.
-            await self.session.send_realtime_input(
-                audio=types.Blob(
-                    data=msg["data"],
-                    mime_type=msg.get("mime_type", "audio/pcm"),
+        try:
+            while True:
+                msg = await self.out_queue.get()
+                if not self.session:
+                    break
+                await self.session.send_realtime_input(
+                    audio=types.Blob(
+                        data=msg["data"],
+                        mime_type=msg.get("mime_type", "audio/pcm"),
+                    )
                 )
-            )
+        except (websockets.exceptions.ConnectionClosed, asyncio.CancelledError):
+            pass
+        except Exception as e:
+            err_m = str(e).lower()
+            if "closed" in err_m or "goaway" in err_m or "1008" in err_m or "broken pipe" in err_m:
+                pass
+            else:
+                print(f"[JARVIS] ⚠️ send_realtime ended: {e}")
 
     async def _listen_audio(self):
         print("[JARVIS] 🎤 Mic started")
@@ -2151,6 +2166,12 @@ class JarvisLive:
                     # keepalive all count.
                     self._clear_stall()
 
+                    _goaway = getattr(response, "go_away", None)
+                    if _goaway is not None:
+                        print("[JARVIS] 🔄 Server sent GoAway — requesting clean reconnect with context preserved")
+                        self.request_reconnect(keep_context=True, reason="server GoAway")
+                        return
+
                     # ── Session resumption ───────────────────────────────────
                     # The server sends this periodically. `resumable` goes false
                     # while a turn is mid-flight — replaying a handle from that
@@ -2203,6 +2224,7 @@ class JarvisLive:
                                 in_buf.append(txt)
                                 self._last_user_speech = time.monotonic()
                                 self.ui.set_state("THINKING")
+                                self._arm_stall()
 
                         if sc.turn_complete:
                             if self._turn_done_event:
@@ -2215,6 +2237,9 @@ class JarvisLive:
                                 in_buf  = []
                                 out_buf = []
                                 self._visemes.reset()
+                                if not self._is_speaking and self.audio_in_queue.empty() and not self.ui.muted:
+                                    self.ui.set_state("LISTENING")
+                                self._clear_stall()
                                 continue
 
                             raw_in = _join_transcript_tokens(in_buf)
@@ -2267,6 +2292,9 @@ class JarvisLive:
                                         "ts": datetime.now().isoformat(),
                                     }))
                             out_buf = []
+                            if not self._is_speaking and self.audio_in_queue.empty() and not self.ui.muted:
+                                self.ui.set_state("LISTENING")
+                            self._clear_stall()
 
                             if self._vision_close_pending:
                                 # This turn_complete IS the vision answer — close camera + release busy flag
@@ -2303,7 +2331,17 @@ class JarvisLive:
                             function_responses=fn_responses
                         )
                         await self._flush_pending_vision()
+        except (websockets.exceptions.ConnectionClosed, asyncio.CancelledError) as e:
+            err_msg = str(e)
+            print(f"[JARVIS] 🔌 Connection closed in recv: {err_msg}")
+            self.request_reconnect(keep_context=True, reason="socket closed")
+            raise _ReconnectSignal(keep_context=True)
         except Exception as e:
+            err_msg = str(e)
+            if "goaway" in err_msg.lower() or "1008" in err_msg or "closed" in err_msg.lower() or "connection aborted" in err_msg.lower():
+                print(f"[JARVIS] 🔄 Session limit / GoAway reached: {err_msg} — reconnecting with context preserved")
+                self.request_reconnect(keep_context=True, reason="session limit")
+                raise _ReconnectSignal(keep_context=True)
             print(f"[JARVIS] ❌ Recv: {e}")
             traceback.print_exc()
             raise

@@ -358,6 +358,11 @@ def _legacy_generate_pdf_from_text(content: str, output_filename: str = "documen
 
         doc.build(story)
         if dest.exists() and dest.stat().st_size > 200:
+            try:
+                from core.file_tracker import get_file_tracker
+                get_file_tracker().register_file(path=dest, action="pdf_generated", description=f"Document: {title}")
+            except Exception:
+                pass
             return f"✅ Generated PDF document saved to `{dest}`"
     except Exception as e:
         print(f"[DocumentStudio] ReportLab error: {e}, using PyMuPDF fallback")
@@ -392,6 +397,11 @@ def _legacy_generate_pdf_from_text(content: str, output_filename: str = "documen
 
         mupdf_doc.save(str(dest))
         mupdf_doc.close()
+        try:
+            from core.file_tracker import get_file_tracker
+            get_file_tracker().register_file(path=dest, action="pdf_generated", description=f"Document: {title}")
+        except Exception:
+            pass
         return f"✅ Generated PDF document saved to `{dest}`"
     except Exception as e2:
         return f"Error generating PDF: {e2}"

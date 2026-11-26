@@ -950,12 +950,33 @@ def focus(match: "Match") -> bool:
             return False
 
     if _OS == "Darwin":
+        # 1. Try activating directly by clean application name or label (zero special permissions needed)
+        for cand in [match.label, match.name]:
+            if cand:
+                clean = cand.removesuffix(".app").strip()
+                try:
+                    r = subprocess.run(
+                        ["osascript", "-e", f'tell application "{clean}" to activate'],
+                        capture_output=True, timeout=3
+                    )
+                    if r.returncode == 0:
+                        return True
+                except Exception:
+                    pass
+                try:
+                    r = subprocess.run(["open", "-a", clean], capture_output=True, timeout=3)
+                    if r.returncode == 0:
+                        return True
+                except Exception:
+                    pass
+
+        # 2. Fallback to System Events by PID
         try:
             r = subprocess.run(
                 ["osascript", "-e",
                  f'tell application "System Events" to set frontmost of the '
                  f'first process whose unix id is {match.pid} to true'],
-                capture_output=True, timeout=5)
+                capture_output=True, timeout=3)
             return r.returncode == 0
         except Exception:
             return False

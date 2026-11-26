@@ -249,6 +249,11 @@ def create_file(path: str, name: str = "", content: str = "") -> str:
             return res
 
         target.write_text(content, encoding="utf-8")
+        try:
+            from core.file_tracker import get_file_tracker
+            get_file_tracker().register_file(target, action="file_created", description=f"Created file {target.name}")
+        except Exception:
+            pass
         push_undo(f"created {target.name}",
                   _undo_write(target, previous) if existed else _undo_create(target))
         return f"File created: {target.name}"
@@ -325,6 +330,11 @@ def move_file(path: str, name: str = "", destination: str = "") -> str:
         dst.parent.mkdir(parents=True, exist_ok=True)
         origin = src.resolve()
         shutil.move(str(src), str(dst))
+        try:
+            from core.file_tracker import get_file_tracker
+            get_file_tracker().register_file(dst, action="file_moved", description=f"Moved {src.name} to {dst.name}")
+        except Exception:
+            pass
         push_undo(f"moved {origin.name} to {dst.parent.name}/",
                   _undo_move(origin, dst.resolve()))
         return f"Moved: {src.name} → {dst.parent.name}/"
@@ -357,6 +367,12 @@ def copy_file(path: str, name: str = "", destination: str = "") -> str:
             shutil.copytree(str(src), str(dst))
         else:
             shutil.copy2(str(src), str(dst))
+
+        try:
+            from core.file_tracker import get_file_tracker
+            get_file_tracker().register_file(dst, action="file_copied", description=f"Copied {src.name} to {dst.name}")
+        except Exception:
+            pass
 
         # The undo for a copy is deleting the copy — never the original.
         _copy = dst.resolve()
@@ -454,6 +470,12 @@ def write_file(path: str, name: str = "", content: str = "",
         with open(target, mode, encoding="utf-8") as f:
             f.write(content)
 
+        try:
+            from core.file_tracker import get_file_tracker
+            get_file_tracker().register_file(target, action="file_written", description=f"Updated file {target.name}")
+        except Exception:
+            pass
+
         action = "Appended to" if append else "Written to"
         if undoable:
             push_undo(f"wrote to {target.name}", _undo_write(target, previous))
@@ -465,9 +487,54 @@ def write_file(path: str, name: str = "", content: str = "",
         return f"Could not write file: {e}"
 
 
+def open_or_preview_file(path: str = "", name: str = "") -> str:
+    from core.file_tracker import get_file_tracker
+    tracker = get_file_tracker()
+    target_p: Path | None = None
+
+    query = (name or path or "").strip()
+    generic_words = {"desktop", "downloads", "documents", "home", "that file", "file", "the file", "pdf", "that pdf", "it", "recent", "recent file"}
+
+    # If specific path/filename provided
+    if query and query.lower() not in generic_words:
+        p = _resolve_path(f"{path}/{name}".strip("/")) if (path and name) else _resolve_path(query)
+        if p.exists() and p.is_file():
+            target_p = p
+        else:
+            tracked = tracker.find_tracked_file(query)
+            if tracked and Path(tracked["path"]).exists():
+                target_p = Path(tracked["path"])
+            else:
+                locs = tracker.locate_file(query)
+                if locs and Path(locs[0]["path"]).exists():
+                    target_p = Path(locs[0]["path"])
+
+    if not target_p:
+        latest = tracker.get_latest_file()
+        if latest and Path(latest["path"]).exists():
+            target_p = Path(latest["path"])
+
+    if not target_p or not target_p.exists():
+        return f"Could not find or open file '{query or 'recent file'}'. Please specify the file name or location."
+
+    ok, msg = tracker.open_or_preview(target_p)
+    return f"{msg} (Location: `{target_p}`)"
+
+
 def find_files(name: str = "", extension: str = "",
                path: str = "home", max_results: int = 20) -> str:
     try:
+        from core.file_tracker import get_file_tracker
+        tracker = get_file_tracker()
+
+        tracked_hits = []
+        if name:
+            thit = tracker.find_tracked_file(name)
+            if thit and thit.get("exists"):
+                tracked_hits.append(thit)
+        if not tracked_hits and name.lower() in ("recent", "latest", "file", "that file", "pdf"):
+            tracked_hits = tracker.get_recent_files(limit=5, extension=extension)
+
         search_path = _resolve_path(path)
         if not _is_safe_path(search_path):
             return f"Access denied: {search_path}"
@@ -475,25 +542,40 @@ def find_files(name: str = "", extension: str = "",
             return f"Search path not found: {path}"
 
         results    = []
+        for th in tracked_hits:
+            results.append(f"📄 {th.get('name')} ({th.get('size_str', 'tracked')}) — {th.get('path')} [Recently Saved]")
+
         dir_count  = 0
         max_dirs   = 500  # performance + safety limit
+        excluded_names = {".git", ".venv", "venv", "node_modules", "Library", ".cache", ".Trash", ".npm", "__pycache__"}
 
         for item in search_path.rglob("*"):
             if item.is_dir():
+                if item.name.startswith(".") or item.name in excluded_names:
+                    continue
                 dir_count += 1
                 if dir_count > max_dirs:
                     break
                 continue
             if not item.is_file():
                 continue
+            if item.name.startswith("."):
+                continue
             if extension and item.suffix.lower() != extension.lower():
                 continue
             if name and name.lower() not in item.name.lower():
                 continue
             size = _format_size(item.stat().st_size)
-            results.append(f"📄 {item.name} ({size}) — {item.parent}")
+            item_entry = f"📄 {item.name} ({size}) — {item.parent}"
+            if item_entry not in results:
+                results.append(item_entry)
             if len(results) >= max_results:
                 break
+
+        if not results and name:
+            locs = tracker.locate_file(name, preferred_ext=extension)
+            for l in locs:
+                results.append(f"📄 {l.get('name')} ({l.get('size_str', '')}) — {l.get('path')}")
 
         if not results:
             query = name or extension or "files"
@@ -729,6 +811,9 @@ def file_controller(
         elif action == "info":
             return get_file_info(path, name=name)
 
+        elif action in ("open", "preview", "open_file", "preview_file"):
+            return open_or_preview_file(path=path, name=name)
+
         else:
             return f"Unknown action: '{action}'"
 
@@ -739,13 +824,13 @@ def file_controller(
 # ── Tool declaration (auto-discovered by core/action_loader.py) ──────────────
 TOOL = {
     "name": "file_controller",
-    "description": "Manages files and folders: list, create, delete, move, copy, rename, read, write, find, disk usage.",
+    "description": "Manages and views files and folders: list, create, delete, move, copy, rename, read, write, find, open, preview, disk usage.",
     "parameters": {
         "type": "OBJECT",
         "properties": {
             "action": {
                 "type": "STRING",
-                "description": "list | create_file | create_folder | delete | move | copy | rename | read | write | find | largest | disk_usage | organize_desktop | info"
+                "description": "list | create_file | create_folder | delete | move | copy | rename | read | write | find | open | preview | largest | disk_usage | organize_desktop | info"
             },
             "path": {
                 "type": "STRING",

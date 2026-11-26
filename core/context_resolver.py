@@ -98,6 +98,11 @@ class ContextResolver:
             r"^(make|turn)\s+this\s+into",
             r"^(tell me more|explain this|continue that|search more about it)",
             r"^(open that again|play the next one|what about his age|what about her age)",
+            r"\b(kaha|kahan|kidhar|where)\b.*(save|rakha|file|pdf|screenshot)",
+            r"\b(wo|woh|that|the)\s+(file|pdf|document|screenshot)\s*(kholo|open|dikhao|show|preview|kahan|kaha)",
+            r"\b(file|pdf|document)\s*(nahi|ni)\s*mil\s*(raha|rahi)",
+            r"\b(dubara|again)\s*(check|search|dhoondo|dhundo)",
+            r"^(open|preview|show)\s+(the\s+)?(file|pdf|document|screenshot|it)$",
             r"\b(iska|uska|unka|iske|uske|is)\b.*(mythology|age|comparison|kya hai)",
             r"\b(cheaper one|sasta wala|dusra wala|pehle do|dono)\b",
             r"^(this|that|these|those|it|again|more|next)$"
@@ -209,6 +214,44 @@ class ContextResolver:
                 confidence=0.95,
                 referenced_context_type="CONVERSATION_HISTORY"
             )
+
+        # 7. File location query (e.g. "Kahan pe rakha hai", "Where did you save it", "File nahi mil rahi")
+        if any(w in t_lower for w in ["kaha pe rakha", "kaha save", "kahan save", "where is the file", "where did you save", "file nahi mil", "file ni mil", "dubara kehne pe", "dubara search", "kidhar save", "kidhar rakha"]):
+            try:
+                from core.file_tracker import get_file_tracker
+                latest = get_file_tracker().get_latest_file()
+                if latest:
+                    loc_name = latest.get("name", "document")
+                    loc_path = latest.get("path", "")
+                    return ResolvedIntent(
+                        is_short_hint=True,
+                        resolved_query=f"Locate and show path of recently saved file: '{loc_name}' at `{loc_path}`",
+                        target_entity=loc_path,
+                        action_type="FILE_LOCATE",
+                        confidence=0.98,
+                        referenced_context_type="ACTIVE_FILE"
+                    )
+            except Exception:
+                pass
+
+        # 8. File open / preview query (e.g. "Wo file kholo", "Open that file", "Preview the pdf", "Wo pdf dikhao")
+        if any(w in t_lower for w in ["wo file", "woh file", "open the file", "preview the file", "open that file", "file open karo", "wo pdf", "open that pdf", "pdf dikhao", "preview that", "open preview"]):
+            try:
+                from core.file_tracker import get_file_tracker
+                latest = get_file_tracker().get_latest_file()
+                if latest:
+                    loc_name = latest.get("name", "document")
+                    loc_path = latest.get("path", "")
+                    return ResolvedIntent(
+                        is_short_hint=True,
+                        resolved_query=f"Open and preview the file '{loc_name}' located at `{loc_path}` in system viewer",
+                        target_entity=loc_path,
+                        action_type="FILE_PREVIEW",
+                        confidence=0.98,
+                        referenced_context_type="ACTIVE_FILE"
+                    )
+            except Exception:
+                pass
 
         # Default fallback context anchoring
         if self._last_topic:
