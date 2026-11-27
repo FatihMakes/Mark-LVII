@@ -139,5 +139,8 @@ TOOL = {
             }
         },
         "required": ["query"]
-    }
+    },
+    "handler": specialist_intelligence,
 }
+
+run = specialist_intelligence

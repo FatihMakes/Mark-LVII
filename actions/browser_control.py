@@ -1330,15 +1330,17 @@ def browser_control(
     browser = params.get("browser", "").lower().strip() or None
     result  = _unknown_action(action)
 
-    if action in ("agent", "autonomous", "workflow", "mission"):
-        goal = params.get("goal") or params.get("query") or params.get("task") or ""
+    if action in ("agent", "autonomous", "workflow", "mission", "browse_and_check", "explore", "human_like", "antigravity", "check", "inspect"):
+        goal = params.get("goal") or params.get("query") or params.get("task") or params.get("url") or ""
+        if not goal and action in ("check", "inspect") and params.get("url"):
+            goal = f"Inspect and check page content at {params.get('url')}"
         if not goal:
-            return "Please specify a browsing goal or task for the autonomous agent."
+            return "Please specify a browsing goal, URL, or task for the autonomous agent."
         from core.browser_agent import get_browser_agent
         agent = get_browser_agent(headless=False)
         res = agent.run_task(goal, player=player)
         if res.get("success"):
-            ret_msg = f"Autonomous browsing mission complete for '{goal}'. Extracted {len(res.get('extracted', {}).get('items', []))} items."
+            ret_msg = f"Autonomous browsing mission complete for '{goal}'. Extracted {len(res.get('extracted', {}).get('items', []))} items. {res.get('title', '')}"
             _log(player, ret_msg)
             return ret_msg
         else:
@@ -1367,6 +1369,21 @@ def browser_control(
         result = _registry.close_one(target) if target else "No browser specified."
         _log(player, result)
         return result
+
+    if action in ("go_to", "search") and (params.get("check") or params.get("inspect") or params.get("autonomous")):
+        target = params.get("url") if action == "go_to" else params.get("query", "")
+        goal = f"Inspect and check {target}"
+        from core.browser_agent import get_browser_agent
+        agent = get_browser_agent(headless=False)
+        res = agent.run_task(goal, player=player)
+        if res.get("success"):
+            ret_msg = f"Browser inspection complete for '{target}'. {res.get('summary', '')}"
+            _log(player, ret_msg)
+            return ret_msg
+        else:
+            err_msg = f"Browser agent: {res.get('error', 'Inspection stopped')}"
+            _log(player, err_msg)
+            return err_msg
 
     # ── Navigation is ALWAYS native ──────────────────────────────────────────
     # go_to / search / new_tab open the site in the user's own browser —
@@ -1542,7 +1559,15 @@ TOOL = {
         "properties": {
             "action": {
                 "type": "STRING",
-                "description": "browse | scan | deep_scan | inspect_page | go_to | search | smart_click | smart_type | click | type | scroll | fill_form | get_text | get_url | press | new_tab | close_tab | screenshot | back | forward | reload | switch | list_browsers | close | close_all"
+                "description": "agent | autonomous | browse_and_check | check | inspect | browse | scan | deep_scan | inspect_page | go_to | search | smart_click | smart_type | click | type | scroll | fill_form | get_text | get_url | press | new_tab | close_tab | screenshot | back | forward | reload | switch | list_browsers | close | close_all"
+            },
+            "goal": {
+                "type": "STRING",
+                "description": "Goal or instruction for autonomous browser agent (e.g. 'search latest AI papers on arxiv', 'check prices on site')"
+            },
+            "check": {
+                "type": "BOOLEAN",
+                "description": "Set to true to have JARVIS inspect and summarize the opened page like an autonomous agent instead of just opening it"
             },
             "browser": {
                 "type": "STRING",

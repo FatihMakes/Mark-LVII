@@ -138,6 +138,27 @@ class WhatsAppDesktopController:
     def is_auto_send_enabled(self) -> bool:
         return bool(self.get_config().get("owner_auto_send_enabled", True))
 
+    def add_or_update_contact(self, name: str, phone: str, relationship: str = "Contact") -> Dict[str, Any]:
+        """Adds or updates a WhatsApp contact in permanent memory."""
+        contacts = self.load_contacts()
+        clean_name = str(name or "").strip()
+        clean_phone = str(phone or "").strip()
+        if not clean_phone.startswith("+") and clean_phone.isdigit() and len(clean_phone) == 10:
+            clean_phone = f"+91{clean_phone}"
+
+        key = clean_name.lower().replace(" ", "_")
+        contact_data = {
+            "name": clean_name,
+            "phone": clean_phone,
+            "relationship": relationship
+        }
+        contacts[key] = contact_data
+        try:
+            CONTACTS_FILE.write_text(json.dumps(contacts, indent=2, ensure_ascii=False), encoding="utf-8")
+        except Exception as e:
+            logger.error(f"Failed to save contact {clean_name}: {e}")
+        return contact_data
+
     def load_contacts(self) -> Dict[str, dict]:
         MEMORY_DIR.mkdir(parents=True, exist_ok=True)
         contacts = dict(DEFAULT_CONTACTS)
@@ -150,27 +171,33 @@ class WhatsAppDesktopController:
                 pass
         return contacts
 
-    def resolve_contacts(self, query: str) -> List[dict]:
+    def resolve_contacts(self, query: str, allow_desktop_search: bool = False) -> List[dict]:
         """
         Resolves contacts matching query. Detects ambiguous multiple matches.
+        Supports Hindi/English honorific stripping and direct phone number fallback.
         """
         contacts = self.load_contacts()
-        q = str(query or "").lower().strip()
-        if not q:
+        raw_q = str(query or "").strip()
+        if not raw_q:
             return []
+
+        q = raw_q.lower()
+        import re
+        # Clean common honorifics: "Aman ji", "Rahul bhai", "Papa ji", "Boss"
+        clean_q = re.sub(r"\b(ji|bhai|bhaiya|sir|boss|bro|friend|colleague)\b", "", q, flags=re.IGNORECASE).strip()
 
         # Find all contacts where query matches full name, first name, key, or substring
         candidate_matches = []
         for key, c in contacts.items():
             c_name = c.get("name", "").lower()
             name_parts = [p.lower() for p in c_name.split()]
-            if q == c_name:
+            if q == c_name or clean_q == c_name:
                 candidate_matches.append(c)
-            elif q in name_parts:
+            elif q in name_parts or clean_q in name_parts:
                 candidate_matches.append(c)
-            elif q == key:
+            elif q == key or clean_q == key:
                 candidate_matches.append(c)
-            elif q in c_name:
+            elif q in c_name or (clean_q and clean_q in c_name):
                 candidate_matches.append(c)
 
         # Deduplicate by (name, phone)
@@ -183,7 +210,7 @@ class WhatsAppDesktopController:
                 unique.append(c)
 
         # If user gave the exact full name (e.g. "Rahul Sharma"), return that specific one
-        exact_full = [c for c in unique if c.get("name", "").lower() == q]
+        exact_full = [c for c in unique if c.get("name", "").lower() in (q, clean_q)]
         if len(exact_full) == 1 and len(unique) > 1:
             return exact_full
 
@@ -193,7 +220,11 @@ class WhatsAppDesktopController:
         # Direct phone number check
         digits = "".join(ch for ch in q if ch.isdigit() or ch == "+")
         if len(digits) >= 7:
-            return [{"name": query.strip(), "phone": digits, "relationship": "Direct Number"}]
+            return [{"name": raw_q, "phone": digits, "relationship": "Direct Number"}]
+
+        # If desktop search fallback allowed
+        if allow_desktop_search and clean_q:
+            return [{"name": clean_q.title(), "phone": "", "relationship": "WhatsApp Search Target"}]
 
         return []
 
@@ -404,6 +435,194 @@ class WhatsAppDesktopController:
                 "message": message,
                 "verified": False,
                 "reason": f"Keystroke dispatch exception: {e}",
+            }
+
+    def open_chat_by_name(self, contact_name: str) -> bool:
+        """
+        Activates WhatsApp Desktop and uses native search (Cmd+F / Cmd+N) to open a chat by name.
+        """
+        if not contact_name:
+            return False
+        clean_name = contact_name.strip().replace('"', '\\"')
+        script = f"""
+        tell application "WhatsApp" to activate
+        delay 0.5
+        tell application "System Events"
+            tell process "WhatsApp"
+                set frontmost to true
+                keystroke "f" using command down
+                delay 0.3
+                keystroke "{clean_name}"
+                delay 0.8
+                key code 36 -- Return key to select top match
+                delay 0.3
+            end tell
+        end tell
+        """
+        try:
+            res = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=5)
+            return res.returncode == 0
+        except Exception as e:
+            logger.error(f"Failed to open chat by name '{contact_name}': {e}")
+            return False
+
+    def send_file(
+        self,
+        recipient_query: str,
+        file_path: Optional[str] = None,
+        caption: str = "",
+        auto_submit: bool = True,
+        operation_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Sends an image, document, video or any file to a WhatsApp contact on macOS.
+        Automatically resolves the file if not explicitly specified via FileTrackerEngine.
+        """
+        # 1. Resolve file path
+        resolved_file = None
+        if not file_path or str(file_path).strip().lower() in ("this", "this file", "the file", "latest", "latest file", "yeh file", "file"):
+            try:
+                from core.file_tracker import get_file_tracker
+                latest = get_file_tracker().get_latest_file()
+                if latest and latest.get("path"):
+                    resolved_file = Path(latest["path"])
+            except Exception as e:
+                logger.warning(f"FileTracker resolution failed: {e}")
+
+        if not resolved_file and file_path:
+            p = Path(file_path).expanduser()
+            if p.exists():
+                resolved_file = p.resolve()
+            else:
+                # Try finding by name
+                try:
+                    from core.file_tracker import get_file_tracker
+                    found = get_file_tracker().find_file(file_path)
+                    if found:
+                        resolved_file = Path(found[0]["path"])
+                except Exception:
+                    pass
+
+        if not resolved_file or not resolved_file.exists():
+            return {
+                "success": False,
+                "status": WhatsAppExecutionState.FAILED,
+                "error": f"File '{file_path or 'recent file'}' could not be located. Please specify a valid file path."
+            }
+
+        # 2. Resolve contact
+        matches = self.resolve_contacts(recipient_query, allow_desktop_search=True)
+        if len(matches) > 1:
+            names = [f"{m.get('name')} ({m.get('phone')})" for m in matches]
+            return {
+                "success": False,
+                "status": WhatsAppExecutionState.RECIPIENT_AMBIGUOUS,
+                "error": f"Multiple contacts found for '{recipient_query}': {', '.join(names)}. Please clarify.",
+                "matches": matches
+            }
+        if not matches:
+            return {
+                "success": False,
+                "status": WhatsAppExecutionState.FAILED,
+                "error": f"Contact '{recipient_query}' could not be resolved."
+            }
+
+        contact = matches[0]
+        phone = contact.get("phone", "").replace("+", "").replace(" ", "").replace("-", "")
+        contact_name = contact.get("name", recipient_query)
+
+        # 3. Open WhatsApp chat window
+        if phone:
+            wa_url = f"whatsapp://send?phone={phone}"
+            try:
+                subprocess.run(["open", wa_url], check=True)
+            except Exception as e:
+                logger.error(f"Failed to open WhatsApp URL scheme: {e}")
+        else:
+            self.open_chat_by_name(contact_name)
+
+        time.sleep(1.2)
+
+        # 4. Attach file via clipboard & keystroke Command+V
+        abs_posix = resolved_file.resolve().as_posix()
+        clean_caption = str(caption or "").strip().replace('"', '\\"')
+
+        caption_script = f"""
+            delay 0.6
+            keystroke "{clean_caption}"
+        """ if clean_caption else ""
+
+        submit_script = """
+            delay 0.5
+            key code 36 -- Return key
+        """ if auto_submit else ""
+
+        escaped_path = abs_posix.replace('"', '\\"')
+        attach_script = f"""
+        tell application "WhatsApp" to activate
+        delay 0.5
+        set the clipboard to (POSIX file "{escaped_path}")
+        delay 0.4
+        tell application "System Events"
+            tell process "WhatsApp"
+                set frontmost to true
+                keystroke "v" using command down
+                {caption_script}
+                {submit_script}
+            end tell
+        end tell
+        """
+
+        try:
+            res = subprocess.run(["osascript", "-e", attach_script], capture_output=True, text=True, timeout=8)
+            if res.returncode == 0:
+                # Register in tracker
+                try:
+                    from core.file_tracker import get_file_tracker
+                    get_file_tracker().register_file(
+                        str(resolved_file),
+                        action="shared",
+                        description=f"Sent to {contact_name} via WhatsApp"
+                    )
+                except Exception:
+                    pass
+
+                self._log_sent_action(
+                    contact_name,
+                    phone or "search_chat",
+                    f"[ATTACHMENT: {resolved_file.name}] {caption}".strip(),
+                    status=WhatsAppExecutionState.SENT_VERIFIED if auto_submit else WhatsAppExecutionState.DRAFT_CREATED,
+                    operation_id=operation_id
+                )
+
+                return {
+                    "success": True,
+                    "status": WhatsAppExecutionState.SENT_VERIFIED if auto_submit else WhatsAppExecutionState.DRAFT_CREATED,
+                    "recipient": contact_name,
+                    "phone": phone,
+                    "file_path": str(resolved_file),
+                    "file_name": resolved_file.name,
+                    "caption": caption,
+                    "verified": True,
+                    "auto_submitted": auto_submit,
+                    "operation_id": operation_id
+                }
+            else:
+                stderr = res.stderr.strip()
+                return {
+                    "success": False,
+                    "status": WhatsAppExecutionState.FAILED,
+                    "error": f"AppleScript attachment failed: {stderr}",
+                    "recipient": contact_name,
+                    "file_path": str(resolved_file)
+                }
+        except Exception as e:
+            return {
+                "success": False,
+                "status": WhatsAppExecutionState.FAILED,
+                "error": f"Exception during file attachment: {e}",
+                "recipient": contact_name,
+                "file_path": str(resolved_file)
             }
 
     def read_unread_messages(self) -> List[Dict[str, Any]]:

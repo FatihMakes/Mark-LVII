@@ -72,6 +72,10 @@ def whatsapp_automation(parameters: dict, player=None, session_memory=None) -> s
     action = (params.get("action") or "status").lower().strip()
     recipient = params.get("recipient") or params.get("contact") or params.get("query") or params.get("name") or ""
     message_text = params.get("message") or params.get("text") or ""
+    file_path = params.get("file_path") or params.get("file") or params.get("path") or params.get("attachment") or ""
+    caption = params.get("caption") or message_text or ""
+    phone_param = params.get("phone") or params.get("number") or ""
+    relationship = params.get("relationship") or "Contact"
     confirm_code = params.get("confirm_id") or params.get("draft_id") or ""
     operation_id = params.get("operation_id") or params.get("idempotency_key") or ""
 
@@ -135,6 +139,46 @@ def whatsapp_automation(parameters: dict, player=None, session_memory=None) -> s
         if player and hasattr(player, "write_log"):
             player.write_log(f"WhatsApp: Read {len(unread)} unread messages.")
         return summary
+
+    # 3b. Add / Update Contact
+    elif action in ("add_contact", "save_contact", "create_contact"):
+        target_name = recipient or params.get("name", "")
+        if not target_name:
+            return "Please specify the contact name to save."
+        if not phone_param:
+            return f"Please specify the phone number for {target_name}."
+        saved = controller.add_or_update_contact(target_name, phone_param, relationship)
+        if player and hasattr(player, "write_log"):
+            player.write_log(f"WhatsApp: Saved contact {saved['name']} ({saved['phone']}).")
+        return f"Saved WhatsApp contact {saved['name']} with number {saved['phone']} ({saved['relationship']})."
+
+    # 3c. Send File / Attach Document
+    elif action in ("send_file", "attach", "attach_file", "send_document") or (action in ("send", "send_message", "dispatch_message") and file_path):
+        is_owner = _is_owner_caller(session_memory)
+        if not is_owner:
+            logger.warning("[SECURITY] WhatsApp file send blocked for unauthenticated/guest caller.")
+            return "Access denied. Sending WhatsApp files requires owner authorization."
+
+        if not recipient:
+            return "Who would you like to send this file to on WhatsApp? Please specify a contact name or number."
+
+        res = controller.send_file(
+            recipient_query=recipient,
+            file_path=file_path,
+            caption=caption,
+            auto_submit=controller.is_auto_send_enabled(),
+            operation_id=operation_id
+        )
+
+        if res.get("success"):
+            recip = res.get("recipient")
+            fname = res.get("file_name", "file")
+            if player and hasattr(player, "write_log"):
+                player.write_log(f"WhatsApp: Dispatched file '{fname}' to {recip}.")
+            return f"I have sent the file '{fname}' to {recip} on WhatsApp, sir."
+        else:
+            err = res.get("error", "Failed to dispatch file")
+            return f"Could not send file to {recipient}: {err}"
 
     # 4. Compose / Send Decision Logic
     elif action in ("compose", "compose_message", "prepare_message", "draft", "draft_message", "send", "send_message", "confirm_send", "dispatch_message"):
@@ -323,22 +367,22 @@ def whatsapp_automation(parameters: dict, player=None, session_memory=None) -> s
             f"Incoming messages will be announced aloud, and direct auto-send is active."
         )
 
-    return "Supported actions: status | search_contact | read_unread | send | compose | confirm_send | stage | call | hands_free_mode"
+    return "Supported actions: status | search_contact | add_contact | send | send_file | read_unread | compose | confirm_send | stage | call | hands_free_mode"
 
 
 TOOL = {
     "name": "whatsapp_automation",
     "description": (
         "WhatsApp Desktop Automation for JARVIS H3.4 with Owner Auto-Send. "
-        "Directly sends messages to unambiguous contacts when instructed by the authenticated owner without repetitive confirmations. "
-        "Supports drafting, reading unread messages, recipient disambiguation, duplicate prevention, and hands-free calls."
+        "Directly sends messages and file attachments to contacts when instructed by the authenticated owner without repetitive confirmations. "
+        "Supports sending files/documents, saving contacts, drafting, reading unread messages, recipient disambiguation, and duplicate prevention."
     ),
     "parameters": {
         "type": "OBJECT",
         "properties": {
             "action": {
                 "type": "STRING",
-                "description": "send | compose | search_contact | read_unread | confirm_send | stage | call | status | hands_free_mode"
+                "description": "send | send_file | add_contact | compose | search_contact | read_unread | confirm_send | stage | call | status | hands_free_mode"
             },
             "recipient": {
                 "type": "STRING",
@@ -347,6 +391,22 @@ TOOL = {
             "message": {
                 "type": "STRING",
                 "description": "Exact text message content to send or draft"
+            },
+            "file_path": {
+                "type": "STRING",
+                "description": "Path to file, document, image, or 'latest' to send attachment via WhatsApp"
+            },
+            "caption": {
+                "type": "STRING",
+                "description": "Optional caption to accompany the file attachment"
+            },
+            "phone": {
+                "type": "STRING",
+                "description": "Phone number for adding new contact (e.g. '+919876543210')"
+            },
+            "relationship": {
+                "type": "STRING",
+                "description": "Relationship tag for contact (e.g. 'Brother', 'Colleague', 'Manager')"
             },
             "draft": {
                 "type": "BOOLEAN",
