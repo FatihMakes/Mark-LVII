@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import json
 import logging
+import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -21,6 +23,28 @@ DESKTOP_DIR = Path.home() / "Desktop"
 NOTES_MD_FILE = DESKTOP_DIR / "JARVIS_Notes.md"
 MEMORY_DIR = Path(__file__).resolve().parent.parent / "memory"
 NOTES_JSON_FILE = MEMORY_DIR / "quick_notes.json"
+
+
+def _sync_to_apple_notes(title: str, text: str) -> bool:
+    """Sync note to macOS Apple Notes application (OpenJarvis connector pattern)."""
+    if sys.platform != "darwin":
+        return False
+    try:
+        clean_title = title.replace("\\", "\\\\").replace('"', '\\"')
+        clean_body = text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "<br>")
+        html_body = f"<div><b>{clean_title}</b></div><div><br></div><div>{clean_body}</div>"
+        script = f'''
+        tell application "Notes"
+            tell default account
+                make new note at folder "Notes" with properties {{name: "{clean_title}", body: "{html_body}"}}
+            end tell
+        end tell
+        '''
+        res = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=8)
+        return res.returncode == 0
+    except Exception as e:
+        logger.debug(f"Apple Notes sync notice: {e}")
+        return False
 
 
 def _load_notes() -> List[Dict[str, Any]]:
@@ -89,6 +113,7 @@ def quick_notes(
         }
         notes.append(entry)
         _save_notes(notes)
+        _sync_to_apple_notes(f"JARVIS: {tag}", text)
 
         if player and hasattr(player, "write_log"):
             player.write_log(f"Notes: Captured note [{tag}]: {text[:40]}...")

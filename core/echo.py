@@ -49,6 +49,8 @@ agnostic, which matters here: the microphone runs at 16 kHz and playback at
 
 from __future__ import annotations
 
+import re
+import threading
 import time
 
 import numpy as np
@@ -286,3 +288,70 @@ class EchoGuard:
             return False
         except Exception:
             return False      # any doubt: do not interrupt
+
+
+# ── Global Microphone Suppression & Anti-Self-Talk Filter ────────────────────
+_mic_suppress_until: float = 0.0
+_recent_assistant_utterances: list[str] = []
+_utterance_lock = threading.Lock()
+
+
+def suppress_mic_window(seconds: float = 2.0) -> None:
+    """Mutes/suppresses mic input for a brief duration (e.g. while timers/notifications speak)."""
+    global _mic_suppress_until
+    _mic_suppress_until = max(_mic_suppress_until, time.time() + float(seconds))
+
+
+def is_mic_suppressed() -> bool:
+    """Returns True if the mic is currently suppressed to prevent hearing internal audio."""
+    return time.time() < _mic_suppress_until
+
+
+def record_assistant_utterance(text: str) -> None:
+    """Records an assistant spoken text snippet for echo matching."""
+    if not text or not str(text).strip():
+        return
+    clean = re.sub(r"[^\w\s]", "", str(text).lower()).strip()
+    if not clean:
+        return
+    with _utterance_lock:
+        _recent_assistant_utterances.append(clean)
+        if len(_recent_assistant_utterances) > 20:
+            _recent_assistant_utterances.pop(0)
+
+
+def is_self_talk_echo(transcript: str) -> bool:
+    """
+    Checks if an incoming transcript is acoustic feedback of the assistant's own voice
+    or known system prompts (e.g. 'Excuse me sir, your timer for...').
+    """
+    if not transcript:
+        return False
+    t_clean = re.sub(r"[^\w\s]", "", transcript.lower()).strip()
+    if len(t_clean) < 4:
+        return False
+
+    # Check known timer and reminder voice prefixes
+    system_phrases = [
+        "excuse me sir your timer",
+        "timer for boil eggs",
+        "timer is up",
+        "your timer for",
+        "reminder boil eggs",
+        "jarvis reminder",
+    ]
+    for sp in system_phrases:
+        if sp in t_clean:
+            return True
+
+    with _utterance_lock:
+        t_words = set(t_clean.split())
+        for u in _recent_assistant_utterances:
+            if t_clean in u or u in t_clean:
+                return True
+            u_words = set(u.split())
+            if len(t_words) >= 3 and len(u_words) >= 3:
+                overlap = len(t_words & u_words) / max(len(t_words), len(u_words))
+                if overlap >= 0.70:
+                    return True
+    return False

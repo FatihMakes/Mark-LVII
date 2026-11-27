@@ -208,6 +208,42 @@ class SpeakerIntelligenceEngine:
 
         return False, 0.0, 1
 
+    # ── Pipeline Stage 3b: Pitch Extraction & Vocal Demographics ──────────────
+    def detect_speaker_gender(self, audio: np.ndarray, sample_rate: int = 16000) -> Tuple[str, str, float]:
+        """
+        Estimates fundamental vocal frequency (F0) and classifies speaker gender demographics.
+        Returns:
+            (gender: "MALE" | "FEMALE", address: "Sir" | "Ma'am", pitch_hz: float)
+        """
+        if len(audio) < sample_rate * 0.2:
+            return "MALE", "Sir", 120.0
+
+        if np.max(np.abs(audio)) > 2.0:
+            float_samples = audio.astype(np.float32) / 32768.0
+        else:
+            float_samples = audio.astype(np.float32).copy()
+        float_samples -= np.mean(float_samples)
+
+        corr = np.correlate(float_samples, float_samples, mode="full")
+        corr = corr[len(corr) // 2:]
+        corr /= (corr[0] + 1e-7)
+
+        min_lag = int(sample_rate / 350)  # 350 Hz
+        max_lag = int(sample_rate / 80)   # 80 Hz
+
+        if max_lag < len(corr):
+            search_corr = corr[min_lag:max_lag]
+            best_idx = int(np.argmax(search_corr))
+            best_val = float(search_corr[best_idx])
+            if best_val > 0.22:
+                pitch_hz = float(sample_rate / (min_lag + best_idx))
+                # Female vocal range is typically 165 Hz - 265 Hz; Male is 85 Hz - 165 Hz
+                if pitch_hz >= 165.0:
+                    return "FEMALE", "Ma'am", pitch_hz
+                return "MALE", "Sir", pitch_hz
+
+        return "MALE", "Sir", 120.0
+
     # ── Pipeline Stage 4: Diarization & Identity Verification ──────────────────
     def process_speech_turn(
         self,
@@ -241,6 +277,9 @@ class SpeakerIntelligenceEngine:
         # 3. Overlap Detection
         is_overlap, overlap_conf, detected_speakers = self.detect_overlapping_speech(clean_audio, sample_rate)
 
+        # 3b. Pitch & Gender Demographics
+        gender, address, pitch = self.detect_speaker_gender(clean_audio, sample_rate)
+
         # 4. Extract Acoustic Vector & Biometric Verification
         auth_res = identity_engine.authenticate_speaker_turn(clean_audio, sample_rate)
         
@@ -251,7 +290,7 @@ class SpeakerIntelligenceEngine:
                 speaker_id="OWNER_001",
                 name=auth_res.speaker_name or self._owner_profile.name,
                 role="OWNER",
-                preferred_address=self._owner_profile.preferred_address,
+                preferred_address=self._owner_profile.preferred_address or "Sir",
                 confidence=auth_res.confidence,
                 is_authenticated=True,
                 is_live_human=auth_res.is_live,
@@ -262,6 +301,11 @@ class SpeakerIntelligenceEngine:
             self._locked_speaker_id = "OWNER_001"
             self._lock_timestamp = now
             permissions.set_current_speaker(permissions.UserRole.OWNER)
+            try:
+                from core.context_resolver import get_context_resolver
+                get_context_resolver().set_speaker_demographics(primary.preferred_address, "MALE")
+            except Exception:
+                pass
 
         elif auth_res.state == "TRUSTED_PERSON":
             uid = f"USER_{abs(hash(auth_res.speaker_name)) % 1000:03d}"
@@ -269,7 +313,7 @@ class SpeakerIntelligenceEngine:
                 speaker_id=uid,
                 name=auth_res.speaker_name,
                 role="AUTHORIZED_PERSON",
-                preferred_address=auth_res.speaker_name,
+                preferred_address=address,
                 confidence=auth_res.confidence,
                 is_authenticated=True,
                 is_live_human=auth_res.is_live,
@@ -277,6 +321,11 @@ class SpeakerIntelligenceEngine:
             )
             if not self._lock_active:
                 permissions.set_current_speaker(permissions.UserRole.AUTHORIZED_PERSON)
+            try:
+                from core.context_resolver import get_context_resolver
+                get_context_resolver().set_speaker_demographics(address, gender)
+            except Exception:
+                pass
 
         elif auth_res.state == "SPOOF_SUSPECTED":
             primary = SpeakerProfile(
@@ -294,9 +343,9 @@ class SpeakerIntelligenceEngine:
             self._unknown_counter += 1
             primary = SpeakerProfile(
                 speaker_id=f"UNKNOWN_{self._unknown_counter:03d}",
-                name="Unknown Individual",
+                name=f"Guest ({gender.title()})",
                 role="TEMPORARY_GUEST",
-                preferred_address="Guest",
+                preferred_address=address,
                 confidence=auth_res.confidence,
                 is_authenticated=False,
                 is_live_human=auth_res.is_live,
@@ -304,6 +353,11 @@ class SpeakerIntelligenceEngine:
             )
             if not self._lock_active:
                 permissions.set_current_speaker(permissions.UserRole.TEMPORARY_GUEST)
+            try:
+                from core.context_resolver import get_context_resolver
+                get_context_resolver().set_speaker_demographics(address, gender)
+            except Exception:
+                pass
 
         # 5. Overlapping Speech & Active Speaker Lock Resolution
         if is_overlap and overlap_conf > 0.40:
@@ -407,6 +461,11 @@ _intelligence_engine = SpeakerIntelligenceEngine()
 
 def get_speaker_engine() -> SpeakerIntelligenceEngine:
     return _intelligence_engine
+
+
+def detect_speaker_gender(audio: np.ndarray, sample_rate: int = 16000) -> Tuple[str, str, float]:
+    """Module-level helper to detect speaker gender and preferred address."""
+    return _intelligence_engine.detect_speaker_gender(audio, sample_rate)
 
 
 def reset_speaker_engine() -> SpeakerIntelligenceEngine:

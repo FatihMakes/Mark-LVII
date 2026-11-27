@@ -177,41 +177,41 @@ class SourceCard(QFrame):
         top_row.setSpacing(6)
 
         num_lbl = QLabel(f"[{index}]")
-        num_lbl.setFont(px_font(10, QFont.Weight.Bold, mono=True))
+        num_lbl.setFont(px_font(12, QFont.Weight.Bold, mono=True))
         num_lbl.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         top_row.addWidget(num_lbl)
 
         pub_lbl = QLabel(publisher)
-        pub_lbl.setFont(px_font(10, QFont.Weight.Bold))
+        pub_lbl.setFont(px_font(12, QFont.Weight.Bold))
         pub_lbl.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
         top_row.addWidget(pub_lbl)
 
         dom_lbl = QLabel(f"·  {domain}")
-        dom_lbl.setFont(px_font(9))
+        dom_lbl.setFont(px_font(11))
         dom_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
         top_row.addWidget(dom_lbl)
 
         top_row.addStretch()
 
         open_icon = QLabel("↗")
-        open_icon.setFont(px_font(10, QFont.Weight.Bold))
+        open_icon.setFont(px_font(12, QFont.Weight.Bold))
         open_icon.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
         top_row.addWidget(open_icon)
         lay.addLayout(top_row)
 
         # Article Title
         t_lbl = QLabel(title)
-        t_lbl.setFont(px_font(11, QFont.Weight.DemiBold))
+        t_lbl.setFont(px_font(13, QFont.Weight.DemiBold))
         t_lbl.setWordWrap(True)
-        t_lbl.setStyleSheet(f"color: {C.TEXT}; background: transparent; line-height: 1.2;")
+        t_lbl.setStyleSheet(f"color: {C.WHITE}; background: transparent; line-height: 1.3;")
         lay.addWidget(t_lbl)
 
         # Snippet if available
         if snippet:
             snip_lbl = QLabel(snippet)
-            snip_lbl.setFont(px_font(9))
+            snip_lbl.setFont(px_font(12))
             snip_lbl.setWordWrap(True)
-            snip_lbl.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
+            snip_lbl.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent; line-height: 1.25;")
             lay.addWidget(snip_lbl)
 
     def mousePressEvent(self, event):

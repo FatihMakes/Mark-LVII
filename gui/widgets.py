@@ -128,7 +128,7 @@ class LogWidget(QTextEdit):
         # the cap is twice the old one-block-per-line figure.
         self.document().setMaximumBlockCount(1200)
         self.document().setDocumentMargin(4)
-        self.setFont(px_font(13))
+        self.setFont(px_font(14))
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setStyleSheet(f"""
             QTextEdit {{

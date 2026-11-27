@@ -2193,7 +2193,7 @@ class MainWindow(QMainWindow):
 
         self._content_display = QTextEdit()
         self._content_display.setReadOnly(True)
-        self._content_display.setFont(px_font(13))
+        self._content_display.setFont(px_font(14))
         self._content_display.setMinimumHeight(60)
         self._content_display.setFrameShape(QFrame.Shape.NoFrame)
         self._content_display.setSizePolicy(

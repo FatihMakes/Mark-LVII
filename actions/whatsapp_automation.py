@@ -233,7 +233,7 @@ def whatsapp_automation(parameters: dict, player=None, session_memory=None) -> s
             if not message_text:
                 return f"What message would you like to draft for {recipient}?"
 
-            matches = controller.resolve_contacts(recipient)
+            matches = controller.resolve_contacts(recipient, allow_desktop_search=True)
             if len(matches) > 1:
                 names = [f"{m.get('name')} ({m.get('phone')})" for m in matches]
                 return f"I found multiple contacts matching '{recipient}': {', '.join(names)}. Which one should I draft the message for?"
@@ -273,8 +273,8 @@ def whatsapp_automation(parameters: dict, player=None, session_memory=None) -> s
         if not message_text:
             return f"What message would you like to send to {recipient}?"
 
-        # Resolve recipient
-        matches = controller.resolve_contacts(recipient)
+        # Resolve recipient (supports saved contacts, direct numbers, and WhatsApp desktop search)
+        matches = controller.resolve_contacts(recipient, allow_desktop_search=True)
         if len(matches) > 1:
             names = [f"{m.get('name')} ({m.get('phone')})" for m in matches]
             return f"I found multiple contacts matching '{recipient}': {', '.join(names)}. Please clarify which contact to message."

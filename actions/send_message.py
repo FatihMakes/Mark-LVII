@@ -252,6 +252,48 @@ def _send_signal(receiver: str, message: str) -> str:
     return _desktop_send("Signal", receiver, message)
 
 
+def _send_imessage(receiver: str, message: str) -> str:
+    """Sends an iMessage or SMS via macOS Messages using AppleScript (OpenJarvis pattern)."""
+    import platform
+    if sys.platform != "darwin" and platform.system().lower() != "darwin":
+        return _desktop_send("Messages", receiver, message)
+
+    clean_target = receiver.strip()
+    escaped = message.replace("\\", "\\\\").replace('"', '\\"')
+
+    # 1. Native AppleScript send to participant
+    script = (
+        'tell application "Messages"\n'
+        '  try\n'
+        '    set targetService to 1st account whose service type = iMessage\n'
+        f'    set targetBuddy to participant "{clean_target}" of targetService\n'
+        f'    send "{escaped}" to targetBuddy\n'
+        '    return "OK"\n'
+        '  on error errMsg\n'
+        '    try\n'
+        f'      set targetBuddy to buddy "{clean_target}"\n'
+        f'      send "{escaped}" to targetBuddy\n'
+        '      return "OK"\n'
+        '    on error err2\n'
+        '      return "ERROR: " & errMsg & " | " & err2\n'
+        '    end try\n'
+        '  end try\n'
+        'end tell'
+    )
+    try:
+        res = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=15)
+        out = (res.stdout or "").strip()
+        if res.returncode == 0 and "ERROR:" not in out:
+            return outcome.done("send_message", platform="iMessage", to=receiver, verified=True)
+        else:
+            err_msg = (res.stderr or out or "AppleScript failed").strip()
+            print(f"[SendMessage] iMessage direct send notice ({err_msg}), falling back to UI automation...")
+    except Exception as e:
+        print(f"[SendMessage] iMessage exception: {e}")
+
+    return _desktop_send("Messages", receiver, message)
+
+
 def _send_discord(receiver: str, message: str) -> str:
     return _desktop_send("Discord", receiver, message)
 
@@ -345,6 +387,7 @@ def _send_email(receiver: str, message: str) -> str:
 
 _PLATFORM_MAP = [
     ({"whatsapp", "wp", "wapp"},              _send_whatsapp),
+    ({"imessage", "messages", "sms", "apple_message"}, _send_imessage),
     ({"email", "mail", "gmail"},              _send_email),
     ({"telegram", "tg"},                      _send_telegram),
     ({"instagram", "ig", "insta"},            _send_instagram),
@@ -482,7 +525,7 @@ TOOL = {
             },
             "platform": {
                 "type": "STRING",
-                "description": "Platform: WhatsApp, Email, Telegram, Instagram, Signal, Discord, Messenger."
+                "description": "Platform: WhatsApp, iMessage, Email, Telegram, Instagram, Signal, Discord, Messenger."
             }
         },
         "required": [

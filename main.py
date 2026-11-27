@@ -1530,19 +1530,23 @@ class JarvisLive:
         # Address form is a property of the language being spoken, so it is
         # stated as a principle rather than a two-language lookup — the model
         # already knows the respectful register of whatever language it is in.
-        _addr = (f"ADDRESS: Always call the user '{_user_name}'."
-                 if _user_name
-                 else 'ADDRESS: Address the user with the ordinary respectful form '
-                      'for a superior in the language you are currently speaking — '
-                      '"sir" in English, its everyday equivalent in any other '
-                      'language. Never an archaic or aristocratic form, and never '
-                      'the form from a different language than the one you are '
-                      'speaking in this sentence.')
+        _addr = (
+            "ADDRESS: When addressing the owner Aman Kumar or a male speaker, address them respectfully as 'Sir'. "
+            "When addressing a female speaker, address them respectfully as 'Ma'am'. "
+            "Always maintain a respectful, polished, natural tone."
+        )
+        anti_hallucination_ctx = (
+            "[CRITICAL: ANTI-HALLUCINATION & SINGLE-RESPONSE DIRECTIVE]\n"
+            "- Deliver exactly ONE crisp, direct, and helpful response per conversational turn. Never output multiple or fragmented responses.\n"
+            "- Never engage in self-talk, echo loops, or reply to your own voice or timer alerts.\n"
+            "- Never hallucinate or claim you performed an action without the corresponding tool having run.\n\n"
+        )
         identity_ctx = (
             f"[IDENTITY]\n"
             f"Your name is {self._asst_name}. "
             f"Always refer to yourself as {self._asst_name}.\n"
             f"{_addr}\n\n"
+            f"{anti_hallucination_ctx}"
         )
 
         # Everything the model is told about *itself* is derived here, not
@@ -1948,6 +1952,12 @@ class JarvisLive:
                 if det is not None:
                     det.feed(indata)
                 return
+
+            # Suppression check: Do not stream mic while internal alerts/timers/say sound
+            from core.echo import is_mic_suppressed
+            if is_mic_suppressed():
+                return
+
             with self._speaking_lock:
                 jarvis_speaking = self._is_speaking
 
@@ -2250,6 +2260,16 @@ class JarvisLive:
                                     self._user_in_accumulator = raw_in
 
                             full_in = self._user_in_accumulator.strip()
+
+                            # ── Anti-Self-Talk & Acoustic Feedback Echo Filter ──
+                            from core.echo import is_self_talk_echo, record_assistant_utterance
+                            if full_in and is_self_talk_echo(full_in):
+                                print(f"[JARVIS] 🛡️ Filtered self-talk echo: '{full_in}'")
+                                self._user_in_accumulator = ""
+                                in_buf = []
+                                out_buf = []
+                                continue
+
                             if full_in and len(full_in) > 2 and full_in != self._last_user_logged:
                                 self._last_user_logged = full_in
                                 self._last_out_logged = ""   # new exchange
@@ -2278,6 +2298,7 @@ class JarvisLive:
                                     full_out = ""
                             if full_out:
                                 self._last_out_logged = full_out
+                                record_assistant_utterance(full_out)
                                 self.ui.write_log(f"{self._asst_name}: {full_out}")
                                 self._session_log.append(f"{self._asst_name}: {full_out}")
                                 try:

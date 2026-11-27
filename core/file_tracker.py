@@ -158,6 +158,10 @@ class FileTrackerEngine:
                     return e
         return None
 
+    def find_file(self, query: str, preferred_ext: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Convenience method combining tracked memory lookup and common roots disk search."""
+        return self.locate_file(query, preferred_ext=preferred_ext)
+
     def locate_file(self, query_name: str, preferred_ext: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Fast disk search across common user roots (Desktop, Downloads, Documents)

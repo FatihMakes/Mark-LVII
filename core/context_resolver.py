@@ -52,6 +52,18 @@ class ContextResolver:
         self._last_artifact: Optional[str] = None
         self._last_topic: str = ""
         self._last_action: Optional[str] = None
+        self._speaker_address: str = "Sir"
+        self._speaker_gender: str = "MALE"
+
+    def set_speaker_demographics(self, address: str, gender: str) -> None:
+        self._speaker_address = address or ("Ma'am" if gender == "FEMALE" else "Sir")
+        self._speaker_gender = gender.upper() if gender else "MALE"
+
+    def get_speaker_address(self) -> str:
+        return self._speaker_address
+
+    def get_speaker_gender(self) -> str:
+        return self._speaker_gender
 
     def record_turn(self, role: str, content: str) -> None:
         """Records a user or assistant utterance in sliding conversation window."""

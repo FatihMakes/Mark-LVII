@@ -268,10 +268,10 @@ class WhatsAppDesktopController:
 
     def stage_message(self, recipient_query: str, message: str) -> Dict[str, Any]:
         """
-        Stages message in WhatsApp Desktop using official whatsapp://send scheme.
-        Does not press Return.
+        Stages message in WhatsApp Desktop using official whatsapp://send scheme (if phone known)
+        or native search & composer pre-fill (if name). Does not press Return.
         """
-        matches = self.resolve_contacts(recipient_query)
+        matches = self.resolve_contacts(recipient_query, allow_desktop_search=True)
         if len(matches) > 1:
             names = [f"{m.get('name')} ({m.get('phone')})" for m in matches]
             return {
@@ -289,11 +289,43 @@ class WhatsAppDesktopController:
 
         contact = matches[0]
         phone = contact.get("phone", "").replace("+", "").replace(" ", "").replace("-", "")
+        contact_name = contact.get("name", recipient_query)
+
         if not phone:
+            # Staging via desktop chat opening and typing message
+            opened = self.open_chat_by_name(contact_name)
+            if not opened:
+                return {
+                    "success": False,
+                    "status": WhatsAppExecutionState.FAILED,
+                    "error": f"Could not find or open contact '{contact_name}' in WhatsApp Desktop.",
+                }
+            escaped_msg = str(message or "").strip().replace('"', '\\"')
+            type_script = f"""
+            tell application "WhatsApp" to activate
+            delay 0.4
+            set the clipboard to "{escaped_msg}"
+            delay 0.2
+            tell application "System Events"
+                tell process "WhatsApp"
+                    set frontmost to true
+                    keystroke "v" using command down
+                end tell
+            end tell
+            """
+            try:
+                subprocess.run(["osascript", "-e", type_script], capture_output=True, text=True, timeout=5)
+            except Exception:
+                pass
+            self._log_sent_action(contact_name, "", message, status=WhatsAppExecutionState.DRAFT_CREATED)
             return {
-                "success": False,
-                "status": WhatsAppExecutionState.FAILED,
-                "error": f"Invalid phone number for contact '{contact.get('name')}'.",
+                "success": True,
+                "status": WhatsAppExecutionState.DRAFT_CREATED,
+                "recipient": contact_name,
+                "phone": "",
+                "message": message,
+                "url": "",
+                "note": "Message pre-filled in WhatsApp chat window."
             }
 
         encoded_text = urllib.parse.quote(str(message or "").strip())
@@ -330,7 +362,7 @@ class WhatsAppDesktopController:
         Stages message and executes verified automated dispatch via AppleScript System Events.
         Includes recipient ambiguity resolution, duplicate protection, and accessibility checks.
         """
-        matches = self.resolve_contacts(recipient_query)
+        matches = self.resolve_contacts(recipient_query, allow_desktop_search=True)
         if len(matches) > 1:
             names = [f"{m.get('name')} ({m.get('phone')})" for m in matches]
             return {
@@ -348,19 +380,20 @@ class WhatsAppDesktopController:
 
         contact = matches[0]
         phone = contact.get("phone", "").replace("+", "").replace(" ", "").replace("-", "")
+        contact_name = contact.get("name", recipient_query)
 
         # Duplicate protection check
-        if self.is_duplicate_send(phone, message, operation_id=operation_id):
+        if self.is_duplicate_send(phone or contact_name, message, operation_id=operation_id):
             return {
                 "success": False,
                 "status": "DUPLICATE_SUPPRESSED",
-                "recipient": contact.get("name"),
+                "recipient": contact_name,
                 "phone": phone,
                 "message": message,
-                "error": f"Duplicate send suppressed: this exact message was recently sent to {contact.get('name')}."
+                "error": f"Duplicate send suppressed: this exact message was recently sent to {contact_name}."
             }
 
-        # Stage via URL scheme
+        # Stage via URL scheme or desktop chat navigation
         stage_res = self.stage_message(recipient_query, message)
         if not stage_res.get("success"):
             return stage_res
@@ -439,28 +472,35 @@ class WhatsAppDesktopController:
 
     def open_chat_by_name(self, contact_name: str) -> bool:
         """
-        Activates WhatsApp Desktop and uses native search (Cmd+F / Cmd+N) to open a chat by name.
+        Activates WhatsApp Desktop and uses native search (Cmd+N / Cmd+F) with clipboard
+        pasting to open a chat by name reliably for any language/encoding.
         """
         if not contact_name:
             return False
         clean_name = contact_name.strip().replace('"', '\\"')
         script = f"""
         tell application "WhatsApp" to activate
-        delay 0.5
+        delay 0.4
+        set the clipboard to "{clean_name}"
+        delay 0.2
         tell application "System Events"
             tell process "WhatsApp"
                 set frontmost to true
-                keystroke "f" using command down
-                delay 0.3
-                keystroke "{clean_name}"
-                delay 0.8
+                try
+                    keystroke "n" using command down
+                on error
+                    keystroke "f" using command down
+                end try
+                delay 0.4
+                keystroke "v" using command down
+                delay 0.6
                 key code 36 -- Return key to select top match
-                delay 0.3
+                delay 0.4
             end tell
         end tell
         """
         try:
-            res = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=5)
+            res = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=8)
             return res.returncode == 0
         except Exception as e:
             logger.error(f"Failed to open chat by name '{contact_name}': {e}")

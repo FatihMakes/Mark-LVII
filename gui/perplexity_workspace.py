@@ -60,13 +60,13 @@ class MiniSourceCard(QFrame):
         super().__init__(parent)
         self._url = url
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedWidth(190)
-        self.setFixedHeight(68)
+        self.setFixedWidth(210)
+        self.setFixedHeight(78)
         self.setStyleSheet(f"""
             QFrame {{
                 background: {C.PANEL2};
                 border: 1px solid {C.BORDER};
-                border-radius: 6px;
+                border-radius: 8px;
             }}
             QFrame:hover {{
                 border-color: {C.PRI};
@@ -74,31 +74,31 @@ class MiniSourceCard(QFrame):
             }}
         """)
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(8, 6, 8, 6)
-        lay.setSpacing(3)
+        lay.setContentsMargins(10, 8, 10, 8)
+        lay.setSpacing(4)
 
         top_row = QHBoxLayout()
-        top_row.setSpacing(4)
+        top_row.setSpacing(6)
 
         num = QLabel(f"[{index}]")
-        num.setFont(px_font(9, QFont.Weight.Bold, mono=True))
+        num.setFont(px_font(11, QFont.Weight.Bold, mono=True))
         num.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         top_row.addWidget(num)
 
-        pub = QLabel(publisher[:18])
-        pub.setFont(px_font(9, QFont.Weight.Bold))
+        pub = QLabel(publisher[:20])
+        pub.setFont(px_font(12, QFont.Weight.Bold))
         pub.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
         top_row.addWidget(pub)
         top_row.addStretch()
 
-        dom = QLabel(domain[:14])
-        dom.setFont(px_font(8))
+        dom = QLabel(domain[:16])
+        dom.setFont(px_font(11))
         dom.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
         top_row.addWidget(dom)
         lay.addLayout(top_row)
 
         t_lbl = QLabel(title)
-        t_lbl.setFont(px_font(10, QFont.Weight.DemiBold))
+        t_lbl.setFont(px_font(12, QFont.Weight.DemiBold))
         t_lbl.setWordWrap(True)
         t_lbl.setStyleSheet(f"color: {C.TEXT}; background: transparent;")
         lay.addWidget(t_lbl)
@@ -142,20 +142,20 @@ class ChatMessageCard(QFrame):
         hdr.setSpacing(6)
 
         badge = QLabel("👤 YOU" if self._is_user else "⚡ JARVIS")
-        badge.setFont(px_font(10, QFont.Weight.Bold))
+        badge.setFont(px_font(12, QFont.Weight.Bold))
         badge.setStyleSheet(f"color: {C.PRI if self._is_user else C.GREEN}; background: transparent; letter-spacing: 1px;")
         hdr.addWidget(badge)
         hdr.addStretch()
 
         if not self._is_user:
             regen_btn = QPushButton("↻ Retry")
-            regen_btn.setFixedSize(50, 20)
+            regen_btn.setFixedSize(62, 24)
             regen_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            regen_btn.setFont(px_font(9))
+            regen_btn.setFont(px_font(11, QFont.Weight.Medium))
             regen_btn.setStyleSheet(f"""
                 QPushButton {{
                     background: transparent;
-                    color: {C.TEXT_DIM};
+                    color: {C.TEXT_MED};
                     border: 1px solid {C.BORDER};
                     border-radius: 4px;
                 }}
@@ -168,13 +168,13 @@ class ChatMessageCard(QFrame):
             hdr.addWidget(regen_btn)
 
         copy_btn = QPushButton("Copy")
-        copy_btn.setFixedSize(46, 20)
+        copy_btn.setFixedSize(52, 24)
         copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        copy_btn.setFont(px_font(9, QFont.Weight.DemiBold))
+        copy_btn.setFont(px_font(11, QFont.Weight.Medium))
         copy_btn.setStyleSheet(f"""
             QPushButton {{
                 background: transparent;
-                color: {C.TEXT_DIM};
+                color: {C.TEXT_MED};
                 border: 1px solid {C.BORDER};
                 border-radius: 4px;
             }}
@@ -190,16 +190,17 @@ class ChatMessageCard(QFrame):
         # Message body: Markdown rendered text browser
         self._body = QTextBrowser()
         self._body.setOpenExternalLinks(True)
-        self._body.setFont(px_font(13))
+        self._body.setFont(px_font(14, QFont.Weight.Normal))
         self._body.setFrameShape(QFrame.Shape.NoFrame)
         self._body.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._body.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._body.setStyleSheet(f"""
             QTextBrowser {{
                 background: transparent;
-                color: {C.TEXT};
+                color: {C.WHITE};
                 border: none;
-                padding: 0px;
+                padding: 2px 0px;
+                line-height: 1.5;
                 selection-background-color: {C.PRI_GHO};
             }}
         """)
@@ -269,19 +270,19 @@ class ResearchAnswerCard(QFrame):
         # ── 1. Top Row: Header + Copy ─────────────────────────────────────
         top_hdr = QHBoxLayout()
         badge = QLabel("⚡ JARVIS RESEARCH ENGINE")
-        badge.setFont(px_font(10, QFont.Weight.Bold))
+        badge.setFont(px_font(12, QFont.Weight.Bold))
         badge.setStyleSheet(f"color: {C.GREEN}; background: transparent; letter-spacing: 1px;")
         top_hdr.addWidget(badge)
         top_hdr.addStretch()
 
         regen_btn = QPushButton("↻ Retry")
-        regen_btn.setFixedSize(52, 20)
+        regen_btn.setFixedSize(62, 24)
         regen_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        regen_btn.setFont(px_font(9))
+        regen_btn.setFont(px_font(11, QFont.Weight.Medium))
         regen_btn.setStyleSheet(f"""
             QPushButton {{
                 background: transparent;
-                color: {C.TEXT_DIM};
+                color: {C.TEXT_MED};
                 border: 1px solid {C.BORDER};
                 border-radius: 4px;
             }}
@@ -294,13 +295,13 @@ class ResearchAnswerCard(QFrame):
         top_hdr.addWidget(regen_btn)
 
         copy_btn = QPushButton("Copy")
-        copy_btn.setFixedSize(46, 20)
+        copy_btn.setFixedSize(52, 24)
         copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        copy_btn.setFont(px_font(9, QFont.Weight.DemiBold))
+        copy_btn.setFont(px_font(11, QFont.Weight.Medium))
         copy_btn.setStyleSheet(f"""
             QPushButton {{
                 background: transparent;
-                color: {C.TEXT_DIM};
+                color: {C.TEXT_MED};
                 border: 1px solid {C.BORDER};
                 border-radius: 4px;
             }}
@@ -317,12 +318,12 @@ class ResearchAnswerCard(QFrame):
         sources = parse_sources_from_text(raw_text)
         if sources:
             src_lbl = QLabel(f"SOURCES ({len(sources)})")
-            src_lbl.setFont(px_font(9, QFont.Weight.Bold))
+            src_lbl.setFont(px_font(11, QFont.Weight.Bold))
             src_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent; letter-spacing: 0.8px;")
             lay.addWidget(src_lbl)
 
             shelf_scroll = QScrollArea()
-            shelf_scroll.setFixedHeight(76)
+            shelf_scroll.setFixedHeight(88)
             shelf_scroll.setWidgetResizable(True)
             shelf_scroll.setFrameShape(QFrame.Shape.NoFrame)
             shelf_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -347,16 +348,17 @@ class ResearchAnswerCard(QFrame):
         formatted_text = self._inline_citations(raw_text, sources)
         self._body = QTextBrowser()
         self._body.setOpenExternalLinks(True)
-        self._body.setFont(px_font(13))
+        self._body.setFont(px_font(14, QFont.Weight.Normal))
         self._body.setFrameShape(QFrame.Shape.NoFrame)
         self._body.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._body.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._body.setStyleSheet(f"""
             QTextBrowser {{
                 background: transparent;
-                color: {C.TEXT};
+                color: {C.WHITE};
                 border: none;
-                padding: 0px;
+                padding: 2px 0px;
+                line-height: 1.5;
                 selection-background-color: {C.PRI_GHO};
             }}
             a {{
@@ -516,9 +518,9 @@ class PerplexityWorkspace(QWidget):
         pills_data = [("🌐 AI Search", 0), ("💬 Assistant", 1), ("⚛ Voice HUD", 2)]
         for label, idx in pills_data:
             b = QPushButton(label)
-            b.setFixedHeight(28)
+            b.setFixedHeight(30)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
-            b.setFont(px_font(11, QFont.Weight.DemiBold))
+            b.setFont(px_font(12, QFont.Weight.DemiBold))
             b.clicked.connect(lambda _, i=idx: self.set_mode(i))
             self._mode_pills.append(b)
             lay.addWidget(b)
@@ -527,16 +529,16 @@ class PerplexityWorkspace(QWidget):
 
         # Engine Status Pill (clickable to open providers)
         self._engine_btn = QPushButton("● GEMINI LIVE")
-        self._engine_btn.setFixedHeight(26)
+        self._engine_btn.setFixedHeight(30)
         self._engine_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._engine_btn.setFont(px_font(10, QFont.Weight.Bold, mono=True))
+        self._engine_btn.setFont(px_font(11, QFont.Weight.Bold, mono=True))
         self._engine_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C.PANEL2};
                 color: {C.GREEN};
                 border: 1px solid {C.BORDER_A};
-                border-radius: 13px;
-                padding: 0 10px;
+                border-radius: 15px;
+                padding: 0 12px;
             }}
             QPushButton:hover {{
                 border-color: {C.GREEN};
@@ -547,16 +549,16 @@ class PerplexityWorkspace(QWidget):
 
         # Context Panel Toggle Pill
         self._context_btn = QPushButton("◨ Context Panel")
-        self._context_btn.setFixedHeight(26)
+        self._context_btn.setFixedHeight(30)
         self._context_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._context_btn.setFont(px_font(11, QFont.Weight.DemiBold))
+        self._context_btn.setFont(px_font(12, QFont.Weight.DemiBold))
         self._context_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C.PANEL};
-                color: {C.TEXT_MED};
+                color: {C.TEXT};
                 border: 1px solid {C.BORDER};
                 border-radius: 6px;
-                padding: 0 10px;
+                padding: 0 12px;
             }}
             QPushButton:hover {{
                 color: {C.PRI};
