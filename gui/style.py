@@ -16,18 +16,27 @@ palette at paint time, so it re-themes for free.
 """
 from __future__ import annotations
 
+import sys
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QColor, QFont, QPolygonF
 
 from gui.theme import C
 
-DISPLAY_FAMILIES = ["Bahnschrift", "Segoe UI", "SF Pro Display", "Helvetica Neue",
-                    "Noto Sans", "DejaVu Sans"]
-MONO_FAMILIES = ["Cascadia Mono", "Consolas", "SF Mono", "Menlo", "DejaVu Sans Mono",
-                 "Courier New"]
-DISPLAY_CSS = ("'Bahnschrift', 'Segoe UI', 'SF Pro Display', 'Helvetica Neue', "
-               "'Noto Sans', 'DejaVu Sans', sans-serif")
-MONO_CSS = "'Cascadia Mono', 'Consolas', 'SF Mono', 'Menlo', 'DejaVu Sans Mono', monospace"
+if sys.platform == "darwin":
+    DISPLAY_FAMILIES = ["Helvetica Neue", "Arial", "Lucida Grande"]
+    MONO_FAMILIES    = ["Menlo", "Monaco", "Courier New"]
+    DISPLAY_CSS      = "'Helvetica Neue', 'Arial'"
+    MONO_CSS         = "'Menlo', 'Monaco', 'Courier New'"
+elif sys.platform == "win32":
+    DISPLAY_FAMILIES = ["Bahnschrift", "Segoe UI", "Arial"]
+    MONO_FAMILIES    = ["Cascadia Mono", "Consolas", "Courier New"]
+    DISPLAY_CSS      = "'Bahnschrift', 'Segoe UI', 'Arial'"
+    MONO_CSS         = "'Cascadia Mono', 'Consolas', 'Courier New'"
+else:
+    DISPLAY_FAMILIES = ["DejaVu Sans", "Noto Sans", "Ubuntu", "Arial"]
+    MONO_FAMILIES    = ["DejaVu Sans Mono", "Ubuntu Mono"]
+    DISPLAY_CSS      = "'DejaVu Sans', 'Noto Sans', 'Ubuntu', 'Arial'"
+    MONO_CSS         = "'DejaVu Sans Mono', 'Ubuntu Mono'"
 
 
 def _apply_weight(f: QFont, weight) -> None:
@@ -45,7 +54,7 @@ def hud_font(size: float, weight=None, italic: bool = False) -> QFont:
     """The display face at a point size — the drop-in for the old
     QFont("Courier New", size, weight). One point larger, because Courier
     New's letters are wide and light and the same size reads bigger."""
-    f = QFont()
+    f = QFont(DISPLAY_FAMILIES[0])
     f.setFamilies(DISPLAY_FAMILIES)
     f.setPointSizeF(float(size) + 1.0)
     _apply_weight(f, weight)
@@ -55,7 +64,7 @@ def hud_font(size: float, weight=None, italic: bool = False) -> QFont:
 
 def mono_font(size: float, weight=None) -> QFont:
     """A monospace at a point size, for keys, codes and columns of figures."""
-    f = QFont()
+    f = QFont(MONO_FAMILIES[0])
     f.setFamilies(MONO_FAMILIES)
     f.setPointSizeF(float(size))
     _apply_weight(f, weight)
@@ -65,8 +74,9 @@ def mono_font(size: float, weight=None) -> QFont:
 def px_font(px: float, weight=QFont.Weight.Normal, mono: bool = False,
             spacing: float = 0.0) -> QFont:
     """A face at a pixel size, for painted widgets that lay text out by pixel."""
-    f = QFont()
-    f.setFamilies(MONO_FAMILIES if mono else DISPLAY_FAMILIES)
+    families = MONO_FAMILIES if mono else DISPLAY_FAMILIES
+    f = QFont(families[0])
+    f.setFamilies(families)
     f.setPixelSize(max(1, int(px)))
     _apply_weight(f, weight)
     if spacing:
@@ -111,12 +121,12 @@ def btn_css(kind: str = "dim", align: str = "left") -> str:
     kind: "primary" (the main action), "dim" (ordinary), "on" / "off" (a switch),
     "choice" (one of two equal options — neither reads as disabled)."""
     pad = "padding: 0 10px;" if align == "left" else "padding: 0 6px;"
-    base = f"text-align: {align}; {pad} border-radius: 0px;"
+    base = f"text-align: {align}; {pad} border-radius: 6px; font-weight: 500;"
     if kind == "primary":
         return f"""
             QPushButton {{ background: {C.PRI_GHO}; color: {C.PRI};
                 border: 1px solid {C.PRI_DIM}; border-left: 3px solid {C.PRI}; {base} }}
-            QPushButton:hover {{ border-color: {C.PRI}; color: {C.WHITE}; }}
+            QPushButton:hover {{ border-color: {C.PRI}; color: {C.WHITE}; background: {C.PANEL2}; }}
             QPushButton:disabled {{ color: {C.TEXT_DIM}; border-color: {C.BORDER}; }}"""
     if kind == "on":
         return f"""
@@ -134,14 +144,14 @@ def btn_css(kind: str = "dim", align: str = "left") -> str:
         QPushButton {{ background: {C.PANEL}; color: {C.TEXT_MED if kind == 'dim' else C.TEXT_DIM};
             border: 1px solid {C.BORDER}; border-left: 3px solid {C.BORDER_A}; {base} }}
         QPushButton:hover {{ color: {C.PRI}; border-color: {C.BORDER_B};
-            border-left: 3px solid {C.PRI_DIM}; }}
+            border-left: 3px solid {C.PRI_DIM}; background: {C.PANEL2}; }}
         QPushButton:disabled {{ color: {C.TEXT_DIM}; border-color: {C.BORDER}; }}"""
 
 
 def scroll_css() -> str:
     return f"""
         QScrollBar:vertical {{ background: transparent; width: 6px; border: none; margin: 2px 0; }}
-        QScrollBar::handle:vertical {{ background: {C.BORDER_B}; min-height: 20px; }}
+        QScrollBar::handle:vertical {{ background: {C.BORDER_B}; min-height: 20px; border-radius: 3px; }}
         QScrollBar::handle:vertical:hover {{ background: {C.PRI_DIM}; }}
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; border: none; }}
         QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}

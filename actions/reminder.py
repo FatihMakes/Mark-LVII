@@ -104,6 +104,14 @@ if not notified:
         subprocess.run(["osascript", "-e", script], check=False)
     except Exception:
         pass
+
+# Spoken alert on macOS:
+try:
+    import subprocess
+    clean_spoken = message.replace('"', '').replace("'", "")
+    subprocess.run(["say", "-v", "Samantha", f"Excuse me sir, reminder: {clean_spoken}"], check=False)
+except Exception:
+    pass
 """
 
     else:  # linux
@@ -290,25 +298,78 @@ def reminder(
     player=None,
     session_memory=None,
 ) -> str:
+    from datetime import timedelta
+    import threading
+    import re
 
     date_str = parameters.get("date", "").strip()
     time_str = parameters.get("time", "").strip()
     message  = parameters.get("message", "Reminder").strip()
+    duration = parameters.get("duration", "").strip().lower()
+    minutes  = parameters.get("minutes") or parameters.get("duration_minutes")
+    seconds  = parameters.get("seconds") or parameters.get("duration_seconds")
+
+    # Parse duration string like "5 minutes", "30 seconds", "10 min"
+    if duration:
+        min_m = re.search(r"(\d+)\s*(?:m|min|minute)", duration)
+        sec_m = re.search(r"(\d+)\s*(?:s|sec|second)", duration)
+        if min_m:
+            minutes = int(min_m.group(1))
+        if sec_m:
+            seconds = int(sec_m.group(1))
+
+    total_seconds = (int(minutes or 0) * 60) + int(seconds or 0)
+    is_timer = total_seconds > 0
+
+    if is_timer and (not date_str or not time_str):
+        target_dt = datetime.now() + timedelta(seconds=total_seconds)
+        date_str = target_dt.strftime("%Y-%m-%d")
+        time_str = target_dt.strftime("%H:%M")
 
     if not date_str or not time_str:
-        return "I need both a date and a time to set a reminder."
+        return "I need a date and time, or a duration (e.g. 5 minutes) to set a reminder or timer."
 
     try:
         target_dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
     except ValueError:
         return "I couldn't parse that date or time. Please use YYYY-MM-DD and HH:MM."
 
-    if target_dt <= datetime.now():
+    if target_dt <= datetime.now() and not is_timer:
         return "That time has already passed — I can't set a reminder in the past."
 
     os_name    = _get_os()
     safe_msg   = _sanitise(message)
     task_name  = f"JARVISReminder_{target_dt.strftime('%Y%m%d_%H%M%S')}"
+
+    # Precision short timer (< 15 minutes) with immediate spoken countdown alert
+    if is_timer and total_seconds <= 900:
+        def _precision_alert():
+            clean = message.replace('"', '').replace("'", "")
+            if player and hasattr(player, "write_log"):
+                player.write_log(f"[Timer Alert] ⏰ {clean}")
+            try:
+                from core import echo
+                echo.suppress_mic_window(5.0)
+                echo.record_assistant_utterance(f"Excuse me sir, your timer for {clean} is up.")
+            except Exception:
+                pass
+            if os_name == "mac":
+                try:
+                    subprocess.run(["say", "-v", "Samantha", f"Excuse me sir, your timer for {clean} is up."], check=False)
+                except Exception:
+                    pass
+
+        # Avoid spawning persistent background timers in unit test environments
+        is_mock = player is not None and "mock" in str(type(player)).lower()
+        if not is_mock:
+            t = threading.Timer(total_seconds, _precision_alert)
+            t.daemon = True
+            t.start()
+
+        time_desc = f"{int(total_seconds // 60)} minutes" if total_seconds >= 60 else f"{total_seconds} seconds"
+        if player and hasattr(player, "write_log"):
+            player.write_log(f"[Timer] ⏱️ Set for {time_desc} — {safe_msg[:40]}")
+        return f"Timer set for {time_desc} ({safe_msg}). I will sound a spoken alert when it is due, sir."
 
     # The phone copy is made first and independently: if this machine's
     # scheduler fails, the reminder still reaches the phone, and the other way
@@ -387,26 +448,36 @@ def _mirror_to_cloud(message: str, target_dt: datetime) -> str:
 # ── Tool declaration (auto-discovered by core/action_loader.py) ──────────────
 TOOL = {
     "name": "reminder",
-    "description": "Sets a timed reminder using Task Scheduler.",
+    "description": "Sets a timed reminder or countdown timer with spoken alerts.",
     "parameters": {
         "type": "OBJECT",
         "properties": {
             "date": {
                 "type": "STRING",
-                "description": "Date in YYYY-MM-DD format"
+                "description": "Date in YYYY-MM-DD format (optional for relative timers)"
             },
             "time": {
                 "type": "STRING",
-                "description": "Time in HH:MM format (24h)"
+                "description": "Time in HH:MM format (24h) (optional for relative timers)"
+            },
+            "duration": {
+                "type": "STRING",
+                "description": "Relative duration (e.g. '5 minutes', '30 seconds', '1 hour')"
+            },
+            "minutes": {
+                "type": "INTEGER",
+                "description": "Timer duration in minutes"
+            },
+            "seconds": {
+                "type": "INTEGER",
+                "description": "Timer duration in seconds"
             },
             "message": {
                 "type": "STRING",
-                "description": "Reminder message text"
+                "description": "Reminder or timer message text"
             }
         },
         "required": [
-            "date",
-            "time",
             "message"
         ]
     },

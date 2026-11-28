@@ -191,11 +191,11 @@ _IDENTITY_FIELDS = ["name", "age", "birthday", "city", "job",
                     "language", "school", "nationality"]
 
 
-def format_memory_for_prompt(memory: dict | None) -> str:
+def format_memory_for_prompt(memory: dict | None, is_owner: bool = True) -> str:
     """Build the memory block that goes into the system prompt.
+    When is_owner is False, strictly shields owner personal facts and private records.
 
-    This used to dump everything. It now sends three things:
-
+    Structure:
       1. IDENTITY  - always, in full. It is small, and it is wrong for the
          assistant to have to look up your name.
       2. RECENT    - the most recently updated entries from every other
@@ -215,6 +215,8 @@ def format_memory_for_prompt(memory: dict | None) -> str:
     already speaks before any slow step."""
     if not memory:
         return ""
+    if not is_owner:
+        return "[MEMORY: RESTRICTED GUEST SESSION — Personal owner memory is isolated and hidden]\n"
 
     core_lines: list[str] = []
 
@@ -225,12 +227,10 @@ def format_memory_for_prompt(memory: dict | None) -> str:
         if not val:
             continue
         if field == "language":
-            # Labelled as an observation, not a setting. A bare "Language:
-            # English" line written months ago reads like a standing order and
-            # was one of the reasons a Turkish question came back in English.
             core_lines.append(
-                f"Has spoken to you in: {val} (an observation about the past — "
-                f"always answer in the language of their CURRENT message)")
+                "Language preference: Dynamic mirroring — detect and answer in the EXACT language "
+                "of the user's CURRENT message (English, Hindi, or Hinglish). Never get locked into a single language."
+            )
         else:
             core_lines.append(f"{field.title()}: {val}")
     for key, entry in identity.items():
@@ -321,6 +321,18 @@ def format_memory_for_prompt(memory: dict | None) -> str:
                        + (f" (+{len(indexed) - len(names)} more)"
                           if len(indexed) > len(names) else ""))
 
+    # 4. Permanently learned user rules, instructions & facts (persist across restarts)
+    try:
+        learned_rules_file = Path(__file__).resolve().parent / "learned_rules.md"
+        if learned_rules_file.exists():
+            rules_content = learned_rules_file.read_text(encoding="utf-8").strip()
+            if rules_content:
+                out.append("")
+                out.append("[PERMANENTLY LEARNED RULES & INSTRUCTIONS — active across every restart]")
+                out.append(rules_content)
+    except Exception:
+        pass
+
     return "\n".join(out) + "\n"
 
 
@@ -347,11 +359,12 @@ def _score(query_words: list[str], cat: str, key: str, value: str) -> int:
     return score
 
 
-def search_memory(query: str, limit: int = 8) -> str:
+def search_memory(query: str, limit: int = 8, is_owner: bool = True) -> str:
     """Find stored facts matching `query`. Backs the recall_memory tool.
+    Strictly isolates owner memory from guest/unauthorized access."""
+    if not is_owner:
+        return "Access restricted: Owner authorization is required to access personal memory."
 
-    An empty query is treated as "show me everything you know", capped - the
-    model asks that when the user says "what do you remember about me?"."""
     memory = load_memory()
     words  = [w for w in re.split(r"[^\w]+", (query or "").lower()) if len(w) > 1]
 

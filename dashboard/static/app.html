@@ -7,19 +7,22 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg:      #07090f;
-      --surface: rgba(255,255,255,0.04);
-      --border:  rgba(255,255,255,0.07);
-      --accent:  #6366f1;
-      --adim:    rgba(99,102,241,0.14);
-      --text:    #dde3ed;
-      --muted:   #5e6a7e;
-      --green:   #22c55e;
-      --gdim:    rgba(34,197,94,0.14);
+      --bg:      #080808;
+      --surface: #121212;
+      --surface-hover: #1a1a1a;
+      --border:  #242424;
+      --accent:  #00d4ff;
+      --adim:    rgba(0, 212, 255, 0.12);
+      --text:    #f5f5f5;
+      --muted:   #888888;
+      --green:   #10b981;
+      --gdim:    rgba(16, 185, 129, 0.14);
+      --card-j:  #141414;
+      --card-u:  #1c1c1c;
     }
     html, body {
       height: 100%; background: var(--bg); color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       display: flex; flex-direction: column; overflow: hidden;
     }
 
@@ -27,9 +30,11 @@
     header {
       flex-shrink: 0; display: flex; align-items: center; gap: 10px;
       padding: 12px 16px; border-bottom: 1px solid var(--border);
-      background: rgba(7,9,15,0.95);
+      background: rgba(10, 10, 10, 0.95);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
     }
-    .logo { font-size: 15px; font-weight: 700; letter-spacing: 6px; }
+    .logo { font-size: 15px; font-weight: 800; letter-spacing: 5px; color: #fff; }
     .logo em { color: var(--accent); font-style: normal; }
     .pill {
       display: flex; align-items: center; gap: 6px; padding: 4px 11px;
@@ -37,7 +42,7 @@
       font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
       color: var(--muted); transition: all 0.3s;
     }
-    .pill.on { background: var(--gdim); border-color: rgba(34,197,94,0.3); color: var(--green); }
+    .pill.on { background: var(--gdim); border-color: rgba(16, 185, 129, 0.35); color: var(--green); }
     .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); transition: background 0.3s; }
     .pill.on .dot { background: var(--green); animation: blink 2s infinite; }
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
@@ -46,35 +51,53 @@
       font-size: 9px; font-weight: 700; letter-spacing: 1.5px; padding: 3px 8px;
       border-radius: 4px; display: none;
     }
-    .enc-badge.on  { display: block; background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.25); color: var(--green); }
+    .enc-badge.on  { display: block; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); color: var(--green); }
     .enc-badge.off { display: block; background: rgba(255,100,100,0.08); border: 1px solid rgba(255,100,100,0.2); color: #f87171; }
     .url { font-size: 10px; font-family: monospace; color: var(--muted); padding: 4px 9px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
 
+    /* ── QUICK ACTION BAR ── */
+    .quick-bar {
+      display: flex; gap: 8px; overflow-x: auto; padding: 8px 14px 4px;
+      background: rgba(10, 10, 10, 0.7); flex-shrink: 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    }
+    .quick-bar::-webkit-scrollbar { display: none; }
+    .q-pill {
+      background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+      padding: 5px 12px; border-radius: 99px; font-size: 11px; font-weight: 600;
+      white-space: nowrap; cursor: pointer; transition: all 0.15s; outline: none;
+    }
+    .q-pill:hover, .q-pill:active {
+      background: var(--surface-hover); color: var(--accent); border-color: var(--accent);
+    }
+
     /* ── FEED ── */
-    main { flex: 1; overflow-y: auto; padding: 14px 16px 8px; display: flex; flex-direction: column; gap: 10px; }
+    main { flex: 1; overflow-y: auto; padding: 14px 16px 8px; display: flex; flex-direction: column; gap: 12px; }
     main::-webkit-scrollbar { width: 3px; }
     main::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-    .msg { max-width: 82%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.55; animation: pop 0.18s ease; }
+    .msg { max-width: 86%; padding: 11px 15px; border-radius: 12px; font-size: 14px; line-height: 1.6; animation: pop 0.18s ease; word-break: break-word; }
     @keyframes pop { from { opacity:0; transform:translateY(4px); } }
-    .msg-j   { align-self:flex-start; background:var(--adim);   border:1px solid rgba(99,102,241,0.18); border-bottom-left-radius:4px; }
-    .msg-u   { align-self:flex-end;   background:var(--surface); border:1px solid var(--border);        border-bottom-right-radius:4px; }
+    .msg-j   { align-self:flex-start; background: var(--card-j); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-bottom-left-radius: 4px; color: var(--text); }
+    .msg-u   { align-self:flex-end;   background: var(--card-u); border: 1px solid var(--border); border-bottom-right-radius: 4px; color: #ffffff; }
     .msg-sys { align-self:center; font-size:11px; color:var(--muted); padding:2px 0; background:transparent; border:none; letter-spacing:0.3px; }
-    .lbl { font-size:9px; font-weight:700; letter-spacing:2px; text-transform:uppercase; opacity:0.45; margin-bottom:4px; }
-    .msg-j .lbl { color:var(--accent); }
-    .msg-u .lbl { color:var(--muted); text-align:right; }
+    .lbl { font-size:9px; font-weight:700; letter-spacing:2px; text-transform:uppercase; opacity:0.6; margin-bottom:4px; }
+    .msg-j .lbl { color: var(--accent); }
+    .msg-u .lbl { color: var(--muted); text-align:right; }
+    .msg-j pre { background: #0b0b0b; padding: 8px 10px; border-radius: 6px; font-family: monospace; font-size: 12px; overflow-x: auto; margin: 6px 0; border: 1px solid #222; }
+    .msg-j code { background: #1c1c1c; padding: 2px 5px; border-radius: 4px; font-family: monospace; font-size: 12px; }
 
     /* ── FILE CARD ── */
     .msg-file {
       align-self: flex-end;
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 14px; border-bottom-right-radius: 4px;
+      background: var(--card-u); border: 1px solid var(--border);
+      border-radius: 12px; border-bottom-right-radius: 4px;
       padding: 11px 14px; display: flex; align-items: center; gap: 12px;
-      max-width: 82%; animation: pop 0.18s ease;
+      max-width: 86%; animation: pop 0.18s ease;
     }
     .fc-icon { font-size: 26px; flex-shrink: 0; }
     .fc-meta { flex: 1; min-width: 0; }
-    .fc-lbl  { font-size:9px; font-weight:700; letter-spacing:2px; text-transform:uppercase; opacity:0.45; color:var(--muted); margin-bottom:4px; }
-    .fc-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fc-lbl  { font-size:9px; font-weight:700; letter-spacing:2px; text-transform:uppercase; opacity:0.6; color:var(--muted); margin-bottom:4px; }
+    .fc-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; }
     .fc-size { font-size: 11px; color: var(--muted); margin-top: 2px; }
     .fc-bar-wrap { height: 3px; background: var(--border); border-radius: 2px; margin-top: 7px; overflow: hidden; }
     .fc-bar { height: 100%; width: 0%; background: var(--accent); border-radius: 2px; transition: width 0.12s linear; }
@@ -82,52 +105,54 @@
     .fc-status.done { color: var(--green); }
     .fc-status.err  { color: #f87171; }
     .fc-dl { display:block; margin-top:6px; font-size:11px; color:var(--accent); text-decoration:none; font-weight:600; }
-    .fc-dl:hover { opacity: 0.8; }
+    .fc-dl:hover { opacity: 0.8; text-decoration: underline; }
 
     /* ── FOOTER ── */
-    footer { flex-shrink:0; padding:10px 14px; border-top:1px solid var(--border); background:rgba(7,9,15,0.95); display:flex; gap:8px; align-items:center; }
-    #inp { flex:1; padding:11px 14px; background:var(--surface); border:1.5px solid var(--border); border-radius:12px; color:var(--text); font-size:14px; outline:none; transition:border-color 0.15s; }
+    footer { flex-shrink:0; padding:10px 14px calc(10px + env(safe-area-inset-bottom)); border-top:1px solid var(--border); background:rgba(10, 10, 10, 0.95); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); display:flex; gap:8px; align-items:center; }
+    #inp { flex:1; padding:12px 14px; background:var(--surface); border:1px solid var(--border); border-radius:12px; color:var(--text); font-size:14px; outline:none; transition:border-color 0.15s; }
     #inp:focus { border-color: var(--accent); }
     #inp::placeholder { color: var(--muted); }
-    .btn { padding:11px 15px; border:none; border-radius:12px; font-size:11px; font-weight:700; letter-spacing:1.5px; cursor:pointer; transition:opacity 0.15s,transform 0.1s; }
+    .btn { padding:11px 16px; border:none; border-radius:12px; font-size:11px; font-weight:700; letter-spacing:1px; cursor:pointer; transition:all 0.15s; }
     .btn:active { transform: scale(0.96); }
-    .btn:hover  { opacity: 0.82; }
-    .btn-send { background: var(--accent); color: #fff; }
+    .btn:hover  { opacity: 0.85; }
+    .btn-send { background: var(--accent); color: #000; font-weight: 800; }
     .btn-wake { background:var(--surface); border:1px solid var(--border); color:var(--muted); display:none; }
-    .btn-wake.show { display:block; color:var(--green); border-color:rgba(34,197,94,0.35); }
+    .btn-wake.show { display:block; color:var(--green); border-color:rgba(16, 185, 129, 0.4); }
     .btn-attach {
       background: var(--surface); border: 1px solid var(--border); color: var(--muted);
       padding: 11px 13px; font-size: 16px; line-height: 1; border-radius: 12px;
-      cursor: pointer; transition: opacity 0.15s, transform 0.1s; display: flex;
+      cursor: pointer; transition: all 0.15s; display: flex;
       align-items: center; justify-content: center; flex-shrink: 0;
     }
-    .btn-attach:hover  { opacity: 0.82; border-color: var(--accent); color: var(--accent); }
+    .btn-attach:hover  { border-color: var(--accent); color: var(--accent); }
     .btn-attach:active { transform: scale(0.96); }
 
     /* ── MIC BUTTON ── */
     #mic-btn {
       background: var(--surface); border: 1px solid var(--border); color: var(--muted);
       padding: 11px 13px; font-size: 16px; line-height: 1; border-radius: 12px;
-      cursor: pointer; transition: opacity 0.15s, transform 0.1s, background 0.2s, border-color 0.2s;
+      cursor: pointer; transition: all 0.2s;
       display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     }
-    #mic-btn:hover  { opacity: 0.82; border-color: var(--accent); color: var(--accent); }
+    #mic-btn:hover  { border-color: var(--accent); color: var(--accent); }
     #mic-btn:active { transform: scale(0.96); }
     #mic-btn.recording {
-      background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.45); color: #ef4444;
+      background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.6); color: var(--green);
       animation: mic-pulse 1s ease-in-out infinite;
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
     }
     #mic-btn.unsupported { opacity: 0.3; cursor: not-allowed; }
-    @keyframes mic-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.65;transform:scale(0.97)} }
+    @keyframes mic-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.75;transform:scale(1.05)} }
 
     /* ── TOAST ── */
     #toast {
       position:fixed; top:66px; left:50%; transform:translateX(-50%) translateY(-8px);
-      background:rgba(34,197,94,0.16); border:1px solid rgba(34,197,94,0.4);
+      background:rgba(16, 185, 129, 0.18); border:1px solid rgba(16, 185, 129, 0.45);
       color:var(--green); font-size:12px; font-weight:700; letter-spacing:1px;
       padding:7px 18px; border-radius:99px;
       opacity:0; transition:opacity 0.22s,transform 0.22s;
       pointer-events:none; white-space:nowrap;
+      backdrop-filter: blur(8px);
     }
     #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
   </style>
@@ -141,9 +166,17 @@
     <div class="spacer"></div>
     <div class="url">__IP__:__PORT__</div>
   </header>
+  <div class="quick-bar" id="quick-bar">
+    <button class="q-pill" onclick="quickCmd('system status')">📊 Status</button>
+    <button class="q-pill" onclick="quickCmd('take a screenshot')">📸 Screen</button>
+    <button class="q-pill" onclick="quickInput('Search the web for ')">🌐 Search</button>
+    <button class="q-pill" onclick="quickCmd('list active tasks')">⚡ Tasks</button>
+    <button class="q-pill" onclick="quickCmd('clean temporary cache files')">🧹 Clean</button>
+    <button class="q-pill" onclick="quickCmd('list installed plugins')">🧩 Plugins</button>
+  </div>
   <main id="feed"></main>
   <footer>
-    <input id="inp" placeholder="Send a command to JARVIS…" autocomplete="off">
+    <input id="inp" placeholder="Ask anything, control JARVIS, or run task…" autocomplete="off">
     <label class="btn-attach" for="file-inp" title="Send file">📎</label>
     <input type="file" id="file-inp" multiple accept="*/*" style="display:none">
     <button id="mic-btn" onclick="doMic()" title="Voice command">🎤</button>
@@ -267,11 +300,36 @@
       }
     }
 
+    function quickCmd(cmd) {
+      const inp = document.getElementById('inp');
+      inp.value = cmd;
+      doSend();
+    }
+    function quickInput(prefix) {
+      const inp = document.getElementById('inp');
+      inp.value = prefix;
+      inp.focus();
+    }
+
+    function formatMarkdown(s) {
+      if (!s) return '';
+      let html = esc(s);
+      html = html.replace(/```([a-zA-Z0-9_]*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+      html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+      html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/^\s*[-•]\s+(.+)$/gm, '<li style="margin-left:14px;">$1</li>');
+      html = html.replace(/^\s*(\d+)\.\s+(.+)$/gm, '<li style="margin-left:14px;" value="$1">$2</li>');
+      html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g, '<a href="$2" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600;">$1</a>');
+      html = html.replace(/(^|[^"'])(https?:\/\/[^\s\)<>]+)/g, '$1<a href="$2" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600;">$2</a>');
+      html = html.replace(/\n/g, '<br>');
+      return html;
+    }
+
     function append(speaker, text) {
       const d = document.createElement('div');
       if (speaker === 'jarvis') {
         d.className = 'msg msg-j';
-        d.innerHTML = `<div class="lbl">Jarvis</div>${esc(text)}`;
+        d.innerHTML = `<div class="lbl">Jarvis</div>${formatMarkdown(text)}`;
       } else {
         d.className = 'msg msg-u';
         d.innerHTML = `<div class="lbl">You</div>${esc(text)}`;

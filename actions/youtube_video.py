@@ -403,11 +403,87 @@ def _handle_trending(parameters: dict, player, speak) -> str:
 
     return result
 
+def _handle_control(parameters: dict, player, speak=None) -> str:
+    action = parameters.get("action", "pause").lower().strip()
+    
+    # Check if HUD video player is playing
+    if player and hasattr(player, "video_is_playing") and player.video_is_playing():
+        if action in ("pause", "stop"):
+            player.pause_video(True)
+            return "Video paused in HUD, sir."
+        elif action in ("resume", "play"):
+            player.pause_video(False)
+            return "Video resumed in HUD, sir."
+        elif action == "mute":
+            player.set_video_muted(True)
+            return "Video muted in HUD, sir."
+        elif action == "unmute":
+            player.set_video_muted(False)
+            return "Video unmuted in HUD, sir."
+
+    # Control browser playback on macOS
+    if is_mac():
+        try:
+            if action in ("pause", "resume", "play_pause"):
+                cmd = 'keystroke "k"'
+            elif action == "stop":
+                cmd = 'keystroke "k"'
+            elif action in ("mute", "unmute"):
+                cmd = 'keystroke "m"'
+            elif action in ("next", "skip"):
+                cmd = 'keystroke "N" using {shift down}'
+            else:
+                cmd = 'keystroke "k"'
+
+            script = f"""
+            tell application "System Events"
+                set appNames to {{"Brave Browser", "Google Chrome", "Safari"}}
+                repeat with appName in appNames
+                    if exists (process appName) then
+                        tell process appName
+                            set frontmost to true
+                            {cmd}
+                        end tell
+                        return appName
+                    end if
+                end repeat
+            end tell
+            return "none"
+            """
+            res = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+            target = res.stdout.strip()
+            if target and target != "none":
+                return f"YouTube video {action} executed in {target}, sir."
+        except Exception as e:
+            print(f"[YouTube] Browser media control failed: {e}")
+
+    # Fallback to pyautogui media key
+    if _PYAUTOGUI:
+        try:
+            if action in ("pause", "resume", "stop"):
+                pyautogui.press("playpause")
+            elif action in ("mute", "unmute"):
+                pyautogui.press("volumemute")
+            elif action in ("next", "skip"):
+                pyautogui.press("nexttrack")
+            return f"YouTube {action} executed, sir."
+        except Exception:
+            pass
+
+    return f"Executed YouTube {action}, sir."
+
 _ACTION_MAP = {
     "play":      _handle_play,
     "summarize": _handle_summarize,
     "get_info":  _handle_get_info,
     "trending":  _handle_trending,
+    "pause":     _handle_control,
+    "resume":    _handle_control,
+    "stop":      _handle_control,
+    "mute":      _handle_control,
+    "unmute":    _handle_control,
+    "next":      _handle_control,
+    "skip":      _handle_control,
 }
 
 
@@ -444,13 +520,13 @@ def youtube_video(
 # ── Tool declaration (auto-discovered by core/action_loader.py) ──────────────
 TOOL = {
     "name": "youtube_video",
-    "description": "Controls YouTube. Use for: playing videos, summarizing a video's content, getting video info, or showing trending videos.",
+    "description": "Controls YouTube and video playback across HUD and web browsers. Use for: playing videos, pausing, resuming, muting, skipping, summarizing transcripts, or getting video info.",
     "parameters": {
         "type": "OBJECT",
         "properties": {
             "action": {
                 "type": "STRING",
-                "description": "play | summarize | get_info | trending (default: play)"
+                "description": "play | pause | resume | stop | mute | unmute | next | summarize | get_info | trending (default: play)"
             },
             "query": {
                 "type": "STRING",

@@ -48,6 +48,8 @@ def _gemini_client(tier: str = gemini.SMART):
 
 
 def _detect_type(path: Path) -> str:
+    if path.is_dir():
+        return "folder"
     ext = path.suffix.lower().lstrip(".")
     image_exts = {"jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "svg", "ico"}
     video_exts = {"mp4", "avi", "mov", "mkv", "wmv", "flv", "webm", "m4v", "3gp"}
@@ -74,7 +76,13 @@ def _detect_type(path: Path) -> str:
 
 
 def _file_size_str(path: Path) -> str:
-    size = path.stat().st_size
+    try:
+        if path.is_dir():
+            size = sum(f.stat().st_size for f in path.rglob('*') if f.is_file())
+        else:
+            size = path.stat().st_size
+    except Exception:
+        size = 0
     if size < 1024:        return f"{size} B"
     if size < 1024**2:     return f"{size/1024:.1f} KB"
     if size < 1024**3:     return f"{size/1024**2:.1f} MB"
@@ -179,80 +187,121 @@ def _process_image(path: Path, action: str, params: dict, speak=None) -> str:
 
 def _process_pdf(path: Path, action: str, params: dict, speak=None) -> str:
     action = action or "summarize"
+    instruction = (
+        params.get("instruction")
+        or params.get("query")
+        or params.get("question")
+        or params.get("prompt")
+        or ""
+    ).strip()
 
-    def _extract_pdf_text(max_chars=50000) -> str:
+    def _extract_pdf_text(max_chars=65000) -> str:
+        try:
+            from actions.document_studio import extract_document_text
+            txt = extract_document_text(str(path))
+            if txt and not txt.startswith("Error") and not txt.startswith("File not found"):
+                return txt[:max_chars]
+        except Exception:
+            pass
         text = ""
         try:
-            import pdfplumber
-            with pdfplumber.open(path) as pdf:
-                for page in pdf.pages:
-                    text += (page.extract_text() or "") + "\n"
-        except ImportError:
+            import pymupdf
+            doc = pymupdf.open(str(path))
+            text = "\n\n".join(page.get_text() or "" for page in doc)
+            doc.close()
+        except Exception:
             try:
-                import PyPDF2
-                with open(path, "rb") as f:
-                    reader = PyPDF2.PdfReader(f)
-                    for page in reader.pages:
-                        text += page.extract_text() + "\n"
-            except ImportError:
-                return ""
+                import pdfplumber
+                with pdfplumber.open(path) as pdf:
+                    for page in pdf.pages:
+                        text += (page.extract_text() or "") + "\n"
+            except Exception:
+                try:
+                    import PyPDF2
+                    with open(path, "rb") as f:
+                        reader = PyPDF2.PdfReader(f)
+                        for page in reader.pages:
+                            text += (page.extract_text() or "") + "\n"
+                except Exception:
+                    return ""
         return text[:max_chars]
 
-    if action in ("summarize", "extract_text", "translate_hint", "analyze", "reformat"):
+    if action in ("summarize", "extract_text", "translate_hint", "analyze", "reformat", "solve", "solution", "explain", "ask") or instruction:
         text = _extract_pdf_text()
         if not text.strip():
-            return "Could not extract text from PDF (may be scanned/image-based)."
+            return "Could not extract text from PDF (may be scanned or image-based with unreadable font)."
 
         if action == "extract_text":
             out = _output_path(path, "text", ".txt")
             out.write_text(text, encoding="utf-8")
             return f"Text extracted ({len(text)} chars). Saved: {out.name}"
 
-        prompt_map = {
-            "summarize":      f"Summarize this PDF document concisely:\n\n{text}",
-            "analyze":        f"Analyze this document thoroughly:\n\n{text}",
-            "translate_hint": f"What language is this document in and what does it say? Summarize:\n\n{text}",
-            "reformat":       f"Reformat this text cleanly with proper structure:\n\n{text}",
-        }
+        # ChatGPT & Claude style comprehensive analysis prompt
+        task_instruction = instruction or {
+            "solve": "Solve all questions, problems, and numericals in this document step-by-step with full workings and boxed answers.",
+            "solution": "Provide complete, rigorous step-by-step solutions for every problem in this document.",
+            "explain": "Explain all concepts, theorems, equations, and sections in this document in thorough detail.",
+            "analyze": "Analyze this document thoroughly with comprehensive breakdowns, key findings, and technical explanations.",
+            "translate_hint": "What language is this document in and what does it say? Provide a full detailed breakdown.",
+            "reformat": "Reformat this text cleanly with proper hierarchical structure, formulas, and headings.",
+            "summarize": "Provide a comprehensive executive summary with key takeaways, chapter breakdown, and conclusions.",
+        }.get(action, "Analyze this document thoroughly and answer all aspects with complete detail.")
+
+        full_prompt = (
+            f"You are an elite academic and professional document analyst (ChatGPT & Claude grade).\n"
+            f"Document: {path.name}\n\n"
+            f"TASK: {task_instruction}\n\n"
+            f"DOCUMENT CONTENT:\n{text}\n\n"
+            f"GUIDELINES:\n"
+            f"- Provide exhaustive, step-by-step solutions without skipping any steps.\n"
+            f"- Use Markdown headings, bullet points, numbered steps, bold highlights, and code/math formatting.\n"
+            f"- Never abbreviate or truncate the output.\n"
+        )
+
         try:
-            model    = _gemini_client()
-            response = model.generate_content(prompt_map.get(action, f"Analyze:\n\n{text}"))
-            result   = response.text.strip()
-            if len(result) > 600 and params.get("save", True):
-                out = _output_path(path, action, ".txt")
-                out.write_text(result, encoding="utf-8")
-                return f"{result[:400]}...\n\nFull result saved: {out.name}"
+            model = _gemini_client()
+            response = model.generate_content(full_prompt)
+            result = response.text.strip()
+            if params.get("save", True):
+                out = _output_path(path, action or "solution", ".md")
+                out.write_text(f"# {action.upper()}: {path.name}\n\n{result}", encoding="utf-8")
+                return f"{result}\n\n---\n*Full detailed solution saved to:* `{out.name}`"
             return result
         except Exception as e:
             return f"AI analysis failed: {e}"
 
     if action == "info":
         try:
-            import pdfplumber
-            with pdfplumber.open(path) as pdf:
-                pages = len(pdf.pages)
+            import pymupdf
+            doc = pymupdf.open(str(path))
+            pages = len(doc)
+            doc.close()
             return f"PDF: {pages} pages, size: {_file_size_str(path)}"
         except Exception:
             return f"PDF size: {_file_size_str(path)}"
 
-    if action == "to_word":
-        text = _extract_pdf_text()
-        if not text:
-            return "Could not extract text to convert."
+    if action in ("to_word", "to_docx"):
         try:
-            from docx import Document
-            doc  = Document()
-            doc.add_heading(path.stem, 0)
-            for para in text.split("\n\n"):
-                if para.strip():
-                    doc.add_paragraph(para.strip())
-            out = _output_path(path, "converted", ".docx")
-            doc.save(out)
-            return f"Converted to Word document. Saved: {out.name}"
-        except ImportError:
-            return "python-docx not installed. Run: pip install python-docx"
+            from actions.document_studio import pdf_to_docx
+            return pdf_to_docx(str(path))
+        except Exception:
+            text = _extract_pdf_text()
+            if not text:
+                return "Could not extract text to convert."
+            try:
+                from docx import Document
+                doc = Document()
+                doc.add_heading(path.stem, 0)
+                for para in text.split("\n\n"):
+                    if para.strip():
+                        doc.add_paragraph(para.strip())
+                out = _output_path(path, "converted", ".docx")
+                doc.save(out)
+                return f"Converted to Word document. Saved: {out.name}"
+            except Exception as e:
+                return f"Word conversion failed: {e}"
 
-    return f"Unknown PDF action: '{action}'. Try: summarize, extract_text, info, to_word"
+    return f"Unknown PDF action: '{action}'. Try: solve, analyze, explain, summarize, extract_text, info, to_word"
 
 def _process_text_doc(path: Path, file_type: str, action: str,
                        params: dict, speak=None) -> str:
@@ -319,61 +368,93 @@ def _process_text_doc(path: Path, file_type: str, action: str,
 
 def _process_data(path: Path, file_type: str, action: str,
                   params: dict, speak=None) -> str:
+    pd = None
     try:
         import pandas as pd
     except ImportError:
-        return "pandas not installed. Run: pip install pandas openpyxl"
+        pass
 
     action = action or "analyze"
 
-    try:
-        if file_type == "csv":
-            df = pd.read_csv(path, encoding="utf-8", errors="replace")
-        else:
-            df = pd.read_excel(path)
-    except Exception as e:
-        return f"Could not read file: {e}"
-
-    if action == "info":
-        return (f"Rows: {len(df)}, Columns: {len(df.columns)}\n"
-                f"Columns: {', '.join(df.columns.tolist())}\n"
-                f"Size: {_file_size_str(path)}")
-
-    if action == "stats":
+    if pd is not None:
         try:
-            desc = df.describe(include="all").to_string()
-            return f"Statistics:\n{desc[:2000]}"
+            if file_type == "csv":
+                df = pd.read_csv(path, encoding="utf-8", errors="replace")
+            else:
+                df = pd.read_excel(path)
         except Exception as e:
-            return f"Stats failed: {e}"
+            return f"Could not read file: {e}"
 
-    if action == "analyze":
-        preview = df.head(50).to_string()
-        prompt  = (f"Analyze this dataset. Columns: {list(df.columns)}\n"
-                   f"Rows: {len(df)}\nPreview:\n{preview}\n\n"
-                   f"Give insights, patterns, and notable findings.")
+        if action == "info":
+            return (f"Rows: {len(df)}, Columns: {len(df.columns)}\n"
+                    f"Columns: {', '.join(df.columns.tolist())}\n"
+                    f"Size: {_file_size_str(path)}")
+
+        if action == "stats":
+            try:
+                desc = df.describe(include="all").to_string()
+                return f"Statistics:\n{desc[:2000]}"
+            except Exception as e:
+                return f"Stats failed: {e}"
+
+        if action == "analyze":
+            preview = df.head(50).to_string()
+            prompt  = (f"Analyze this dataset. Columns: {list(df.columns)}\n"
+                       f"Rows: {len(df)}\nPreview:\n{preview}\n\n"
+                       f"Give insights, patterns, and notable findings.")
+            try:
+                model    = _gemini_client()
+                response = model.generate_content(prompt)
+                return response.text.strip()
+            except Exception as e:
+                return f"AI analysis failed: {e}"
+
+        if action in ("convert", "to_csv", "to_excel", "to_json"):
+            fmt = {"to_csv": "csv", "to_excel": "xlsx", "to_json": "json",
+                   "convert": params.get("format", "csv")}.get(action, "csv")
+            try:
+                if fmt == "csv":
+                    out = _output_path(path, "converted", ".csv")
+                    df.to_csv(out, index=False, encoding="utf-8")
+                elif fmt == "xlsx":
+                    out = _output_path(path, "converted", ".xlsx")
+                    df.to_excel(out, index=False)
+                elif fmt == "json":
+                    out = _output_path(path, "converted", ".json")
+                    df.to_json(out, orient="records", force_ascii=False, indent=2)
+                return f"Converted to {fmt.upper()}. Saved: {out.name}"
+            except Exception as e:
+                return f"Convert failed: {e}"
+    else:
+        # Fallback when pandas is not installed
         try:
-            model    = _gemini_client()
+            import csv
+            if file_type == "csv":
+                with open(path, "r", encoding="utf-8", errors="replace") as f:
+                    r = list(csv.reader(f))
+                cols = r[0] if r else []
+                rows_count = max(0, len(r) - 1)
+                preview = "\n".join([", ".join(row) for row in r[:30]])
+            else:
+                import openpyxl
+                wb = openpyxl.load_workbook(path, data_only=True)
+                ws = wb.active
+                r = list(ws.iter_rows(values_only=True))
+                cols = [str(c) for c in (r[0] if r else [])]
+                rows_count = max(0, len(r) - 1)
+                preview = "\n".join([" | ".join(str(c) for c in row if c is not None) for row in r[:30]])
+
+            if action == "info":
+                return f"Rows: {rows_count}, Columns: {len(cols)}\nColumns: {', '.join(cols)}\nSize: {_file_size_str(path)}"
+
+            prompt = (f"Analyze this dataset. Columns: {cols}\n"
+                      f"Rows: {rows_count}\nPreview:\n{preview}\n\n"
+                      f"Give insights, patterns, and notable findings.")
+            model = _gemini_client()
             response = model.generate_content(prompt)
             return response.text.strip()
         except Exception as e:
-            return f"AI analysis failed: {e}"
-
-    if action in ("convert", "to_csv", "to_excel", "to_json"):
-        fmt = {"to_csv": "csv", "to_excel": "xlsx", "to_json": "json",
-               "convert": params.get("format", "csv")}.get(action, "csv")
-        try:
-            if fmt == "csv":
-                out = _output_path(path, "converted", ".csv")
-                df.to_csv(out, index=False, encoding="utf-8")
-            elif fmt == "xlsx":
-                out = _output_path(path, "converted", ".xlsx")
-                df.to_excel(out, index=False)
-            elif fmt == "json":
-                out = _output_path(path, "converted", ".json")
-                df.to_json(out, orient="records", force_ascii=False, indent=2)
-            return f"Converted to {fmt.upper()}. Saved: {out.name}"
-        except Exception as e:
-            return f"Convert failed: {e}"
+            return f"Data processing fallback failed: {e}"
 
     if action == "filter":
         col       = params.get("column", "")
@@ -783,27 +864,155 @@ def _process_pptx(path: Path, action: str, params: dict, speak=None) -> str:
 
 from core import outcome
 
+_LAST_UPLOADED_FILE: Path | None = None
+
+def set_last_uploaded(path: Path | str) -> None:
+    global _LAST_UPLOADED_FILE
+    try:
+        p = Path(path).expanduser().resolve()
+        if p.exists():
+            _LAST_UPLOADED_FILE = p
+    except Exception:
+        pass
+
+def get_last_uploaded() -> Path | None:
+    global _LAST_UPLOADED_FILE
+    return _LAST_UPLOADED_FILE
+
+
+def _process_directory(path: Path, action: str, params: dict, speak=None) -> str:
+    """Handles folder/directory analysis, listing, and inspection (ChatGPT/Claude/Antigravity style)."""
+    action = action or "summarize"
+    try:
+        all_entries = []
+        for root, dirs, files in os.walk(path):
+            dirs[:] = [d for d in dirs if not d.startswith(".") and d not in ("__pycache__", "node_modules", ".venv", "venv")]
+            for f in files:
+                if not f.startswith("."):
+                    p = Path(root) / f
+                    try:
+                        all_entries.append((p.relative_to(path), p.stat().st_size, _detect_type(p)))
+                    except Exception:
+                        pass
+            if len(all_entries) > 200:
+                break
+
+        total_files = len(all_entries)
+        total_size = sum(sz for _, sz, _ in all_entries)
+        size_str = f"{total_size / 1024:.1f} KB" if total_size < 1024**2 else f"{total_size / 1024**2:.1f} MB"
+
+        by_type = {}
+        for _, _, ftype in all_entries:
+            by_type[ftype] = by_type.get(ftype, 0) + 1
+        breakdown_str = ", ".join(f"{k}: {v}" for k, v in sorted(by_type.items(), key=lambda x: -x[1]))
+
+        file_preview = "\n".join(f"- `{rel}` ({sz/1024:.1f} KB, {ftype})" for rel, sz, ftype in all_entries[:35])
+        more_str = f"\n... and {total_files - 35} more files" if total_files > 35 else ""
+
+        key_context = ""
+        for rel, _, _ in all_entries:
+            name_lower = rel.name.lower()
+            if name_lower in ("readme.md", "readme.txt", "package.json", "requirements.txt", "pyproject.toml"):
+                try:
+                    target_file = path / rel
+                    snippet = target_file.read_text(encoding="utf-8", errors="ignore")[:3000]
+                    key_context += f"\n\n### Key File `{rel}`:\n```\n{snippet}\n```"
+                except Exception:
+                    pass
+                if len(key_context) > 6000:
+                    break
+
+        if action in ("list", "tree"):
+            return (
+                f"# 📁 Folder Contents: `{path.name}/`\n"
+                f"**Path:** `{path}`  \n"
+                f"**Total Files:** {total_files} ({size_str})  \n"
+                f"**Types:** {breakdown_str}  \n\n"
+                f"### Files Preview:\n"
+                f"{file_preview}{more_str}"
+            )
+
+        instruction = params.get("instruction") or params.get("query") or params.get("prompt") or "Summarize the purpose, architecture, and contents of this folder."
+        prompt = (
+            f"Analyze this uploaded project folder `{path.name}/`.\n"
+            f"Total files: {total_files}, Total size: {size_str}\n"
+            f"Types: {breakdown_str}\n\n"
+            f"File structure:\n{file_preview}{more_str}\n"
+            f"{key_context}\n\n"
+            f"User instruction: {instruction}\n"
+            f"Provide a clear, structured analysis of what this folder contains, what it does, and key files."
+        )
+        try:
+            model = _gemini_client()
+            resp = model.generate_content(prompt)
+            return resp.text.strip()
+        except Exception as e:
+            return (
+                f"# 📁 Folder: `{path.name}/`\n"
+                f"**Path:** `{path}` | **Files:** {total_files} ({size_str}) | **Types:** {breakdown_str}\n\n"
+                f"### Files:\n{file_preview}{more_str}\n\n"
+                f"(AI note: {e})"
+            )
+    except Exception as e:
+        return f"Error processing folder '{path}': {e}"
+
 
 def file_processor(parameters: dict, player=None, speak=None) -> str:
-    file_path_str = parameters.get("file_path", "").strip()
-    if not file_path_str:
-        return "No file path provided."
+    global _LAST_UPLOADED_FILE
+    params = parameters or {}
+    file_path_str = (
+        params.get("file_path")
+        or params.get("path")
+        or params.get("file")
+        or params.get("filepath")
+        or params.get("filename")
+        or params.get("target")
+        or ""
+    ).strip().strip("'\"")
 
-    path = Path(file_path_str)
+    if not file_path_str:
+        if _LAST_UPLOADED_FILE and _LAST_UPLOADED_FILE.exists():
+            path = _LAST_UPLOADED_FILE
+        else:
+            return "No file path provided, and no recent file has been uploaded."
+    else:
+        path = Path(file_path_str).expanduser()
+        if not path.exists() and not path.is_absolute():
+            for base in (Path.cwd(), Path.home() / "Desktop", Path.home() / "Downloads"):
+                cand = base / path
+                if cand.exists():
+                    path = cand
+                    break
+
     if not path.exists():
-        return f"File not found: {file_path_str}"
-    if not path.is_file():
-        return f"Path is not a file: {file_path_str}"
+        return f"File not found: {file_path_str or path}"
+
+    _LAST_UPLOADED_FILE = path
 
     file_type   = _detect_type(path)
-    action      = (parameters.get("action") or "").lower().strip()
-    instruction = parameters.get("instruction", "")
-    params      = {**parameters, "instruction": instruction}
+    action      = (params.get("action") or "").lower().strip()
+    instruction = (
+        params.get("instruction")
+        or params.get("query")
+        or params.get("prompt")
+        or params.get("question")
+        or ""
+    )
+    processed_params = {**params, "instruction": instruction}
 
     log_msg = f"[FileProcessor] {file_type.upper()} | {path.name} | action={action or 'auto'}"
     print(log_msg)
     if player:
         player.write_log(log_msg)
+
+    if file_type == "folder":
+        result = _process_directory(path, action, processed_params, speak)
+        if player and hasattr(player, "show_content") and result:
+            try:
+                player.show_content(f"Folder Analysis: {path.name}/", str(result)[:3000])
+            except Exception:
+                pass
+        return outcome.untrusted(f"folder:{path.name}", result)
 
     if file_type == "unknown":
         try:
@@ -811,7 +1020,13 @@ def file_processor(parameters: dict, player=None, speak=None) -> str:
             model   = _gemini_client()
             prompt  = f"File: {path.name}\nContent preview:\n{content}\n\nTask: {action or instruction or 'Describe what this file contains and what can be done with it.'}"
             response = model.generate_content(prompt)
-            return response.text.strip()
+            result = response.text.strip()
+            if player and hasattr(player, "show_content") and result:
+                try:
+                    player.show_content(f"File Analysis: {path.name}", str(result)[:3000])
+                except Exception:
+                    pass
+            return outcome.untrusted(f"file:{path.suffix.lstrip('.') or 'text'}", result)
         except Exception as e:
             return f"Unknown file type ({path.suffix}). Could not process: {e}"
 
@@ -836,11 +1051,12 @@ def file_processor(parameters: dict, player=None, speak=None) -> str:
         return f"Unsupported file type: {file_type}"
 
     try:
-        result = handler(path, action, params, speak)
-        # A document's contents are not the user speaking. A PDF, a spreadsheet
-        # or a text file can carry anything its author put there, including a
-        # sentence addressed to whatever reads it — so what comes out of one
-        # goes to the model marked as data. See core/outcome.untrusted().
+        result = handler(path, action, processed_params, speak)
+        if player and hasattr(player, "show_content") and result:
+            try:
+                player.show_content(f"File Analysis: {path.name}", str(result)[:3000])
+            except Exception:
+                pass
         return outcome.untrusted(f"file:{path.suffix.lstrip('.') or 'text'}",
                                  result) if result else outcome.done(
             "file_processor", file=path.name, note="nothing to report")
@@ -865,7 +1081,15 @@ TOOL = {
         "properties": {
             "file_path": {
                 "type": "STRING",
-                "description": "Full path to the uploaded file. Leave empty to use the currently uploaded file."
+                "description": "Full path to the uploaded file or folder. Leave empty to use the currently uploaded file."
+            },
+            "path": {
+                "type": "STRING",
+                "description": "Alias for file_path (full path to the uploaded file or folder)."
+            },
+            "query": {
+                "type": "STRING",
+                "description": "Question or prompt about what to do with the file or folder."
             },
             "action": {
                 "type": "STRING",

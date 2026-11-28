@@ -51,6 +51,7 @@ mss>=9,<11
 psutil>=5.9,<8
 send2trash                   # file_controller — recoverable deletes
 python-pptx                  # file_processor — presentation reading
+pandas                       # file_processor — data analysis and CSV/Excel parsing
 
 # ── Remote dashboard (control from your phone) ────────────────────────────────
 fastapi>=0.110,<1
@@ -93,6 +94,10 @@ ddgs>=9,<10                  # web_search — the maintained successor to
 pdfplumber                   # file_processor — PDF text and tables
 PyPDF2                       # file_processor — PDF fallback reader
 python-docx                  # file_processor — .docx reading
+pdf2docx                     # document_studio — PDF to Word conversion
+PyMuPDF                      # document_studio — PDF direct editing & text replacement
+matplotlib                   # code_interpreter — data visualization & charts
+sympy                        # code_interpreter — advanced symbolic math solver
 pynvml                       # system_monitor + the HUD's GPU meter (NVIDIA)
 
 # ── Optional: heavy extras, install only if you want the feature ──────────────

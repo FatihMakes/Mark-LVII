@@ -36,10 +36,12 @@ WHY IT IS NOT A LIST OF APPLICATIONS
 """
 import os
 import platform
+import re
 import shutil
 import subprocess
 import threading
 import time
+from pathlib import Path
 
 from core import appidentity, outcome
 from core.lazyimport import LazyModule, installed
@@ -128,8 +130,83 @@ def _launch_windows(app_name: str) -> bool:
     return _desktop_search(app_name)
 
 
+_MACOS_APPS_CACHE: dict[str, str] = {}
+_MACOS_LAST_SCAN: float = 0.0
+
+# Spoken aliases mapping to macOS bundle names
+_MACOS_SPOKEN_MAP: dict[str, str] = {
+    "code": "Visual Studio Code",
+    "vs code": "Visual Studio Code",
+    "vscode": "Visual Studio Code",
+    "word": "Microsoft Word",
+    "ms word": "Microsoft Word",
+    "outlook": "Microsoft Outlook",
+    "ms outlook": "Microsoft Outlook",
+    "settings": "System Settings",
+    "system settings": "System Settings",
+    "preferences": "System Settings",
+    "system preferences": "System Settings",
+    "terminal": "Terminal",
+    "finder": "Finder",
+    "files": "Finder",
+    "preview": "Preview",
+    "pdf viewer": "Preview",
+    "calculator": "Calculator",
+    "calc": "Calculator",
+    "notes": "Notes",
+    "calendar": "Calendar",
+    "photos": "Photos",
+    "music": "Music",
+    "apple music": "Music",
+    "brave": "Brave Browser",
+    "chrome": "Google Chrome",
+    "iina": "IINA",
+    "sublime": "Sublime Text",
+    "sublime text": "Sublime Text",
+    "intellij": "IntelliJ IDEA CE",
+    "idea": "IntelliJ IDEA CE",
+}
+
+
+def _get_macos_apps() -> dict[str, str]:
+    global _MACOS_APPS_CACHE, _MACOS_LAST_SCAN
+    now = time.monotonic()
+    if _MACOS_APPS_CACHE and (now - _MACOS_LAST_SCAN < 60.0):
+        return _MACOS_APPS_CACHE
+
+    apps: dict[str, str] = {}
+    scan_roots = [
+        Path("/Applications"),
+        Path("/System/Applications"),
+        Path("/System/Applications/Utilities"),
+        Path.home() / "Applications",
+        Path("/System/Library/CoreServices"),
+    ]
+    for root in scan_roots:
+        if not root.is_dir():
+            continue
+        try:
+            for item in root.iterdir():
+                if item.suffix.lower() == ".app":
+                    clean_name = item.stem.lower()
+                    apps[clean_name] = str(item)
+                    folded = re.sub(r"[^\w]", "", clean_name)
+                    if folded and folded not in apps:
+                        apps[folded] = str(item)
+        except Exception:
+            continue
+
+    _MACOS_APPS_CACHE = apps
+    _MACOS_LAST_SCAN = now
+    return apps
+
+
 def _launch_macos(app_name: str) -> bool:
-    for candidate in (app_name, f"{app_name}.app"):
+    clean = app_name.strip().lower().removesuffix(".app")
+    resolved_target = _MACOS_SPOKEN_MAP.get(clean, app_name)
+
+    # 1. Direct open -a on resolved name, candidate, and bundle name
+    for candidate in (resolved_target, f"{resolved_target}.app", app_name, f"{app_name}.app"):
         try:
             result = subprocess.run(
                 ["open", "-a", candidate], capture_output=True, timeout=8
@@ -139,7 +216,37 @@ def _launch_macos(app_name: str) -> bool:
         except Exception:
             pass
 
-    binary = shutil.which(app_name) or shutil.which(app_name.lower())
+    # 2. Match against scanned system and user applications
+    apps = _get_macos_apps()
+    app_path = apps.get(clean) or apps.get(re.sub(r"[^\w]", "", clean)) or apps.get(resolved_target.lower())
+    if not app_path:
+        for k, path in apps.items():
+            if clean in k or k in clean:
+                app_path = path
+                break
+
+    if app_path and os.path.exists(app_path):
+        try:
+            res = subprocess.run(["open", app_path], capture_output=True, timeout=8)
+            if res.returncode == 0:
+                return True
+        except Exception:
+            pass
+
+    # 3. Try AppleScript activate
+    clean_act = resolved_target.removesuffix(".app")
+    try:
+        res = subprocess.run(
+            ["osascript", "-e", f'tell application "{clean_act}" to activate'],
+            capture_output=True, timeout=3
+        )
+        if res.returncode == 0:
+            return True
+    except Exception:
+        pass
+
+    # 4. Binary on PATH
+    binary = shutil.which(app_name) or shutil.which(app_name.lower()) or shutil.which(resolved_target.lower())
     if binary:
         try:
             subprocess.Popen(
@@ -259,21 +366,27 @@ def _launch_and_verify(player, spoken: str, launcher_name: str,
         if not requested and launcher_name.lower() != spoken.lower():
             requested = launcher(spoken)
 
+        # Check for launch outcome with 6s timeout
         appeared = appidentity.wait_for_launch(
-            spoken, before, timeout=_LAUNCH_TIMEOUT
+            spoken, before, timeout=6.0
         )
         if appeared is not None:
             _log(player, f"JARVIS: {appeared.label} is open.")
             return
 
-        if not requested:
-            trouble = (f"{spoken} could not be started - nothing on this system "
-                       f"answers to that name, so it may not be installed")
-        else:
-            trouble = (f"{spoken} was asked to start but no new application "
-                       f"appeared within {int(_LAUNCH_TIMEOUT)} seconds, so it "
-                       f"is NOT confirmed open - it may be slow to load, or not "
-                       f"installed under that name")
+        # Check if the process is running now (e.g. was already in tray or background, and is now frontmost)
+        now_running = appidentity.running(spoken, include_self=True)
+        if now_running:
+            _log(player, f"JARVIS: {now_running[0].label} is open.")
+            return
+
+        # If launcher reported success (e.g. open -a returned 0)
+        if requested:
+            _log(player, f"JARVIS: {spoken} was opened.")
+            return
+
+        trouble = (f"{spoken} could not be started - nothing on this system "
+                   f"answers to that name, so it may not be installed")
 
         _log(player, f"JARVIS: {trouble}")
         _say(player, "Tell the user, in one short sentence in their own "

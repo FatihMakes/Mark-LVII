@@ -267,6 +267,15 @@ def _screenshot(save_path: str | None = None) -> str:
     path = _safe_screenshot_path(save_path)
     img  = pyautogui.screenshot()
     img.save(str(path))
+    try:
+        from core.file_tracker import get_file_tracker
+        get_file_tracker().register_file(
+            path=path,
+            action="screenshot_taken",
+            description="Captured screen screenshot"
+        )
+    except Exception:
+        pass
     return f"Screenshot saved: {path}"
 
 
