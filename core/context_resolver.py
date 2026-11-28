@@ -54,6 +54,13 @@ class ContextResolver:
         self._last_action: Optional[str] = None
         self._speaker_address: str = "Sir"
         self._speaker_gender: str = "MALE"
+        self._active_language: str = "ENGLISH"
+
+    def set_active_language(self, lang: str) -> None:
+        self._active_language = lang.upper() if lang else "ENGLISH"
+
+    def get_active_language(self) -> str:
+        return self._active_language
 
     def set_speaker_demographics(self, address: str, gender: str) -> None:
         self._speaker_address = address or ("Ma'am" if gender == "FEMALE" else "Sir")
@@ -71,9 +78,14 @@ class ContextResolver:
         if len(self._history) > 20:
             self._history.pop(0)
 
-        # Update last topic if user turn
+        # Update last topic and active language if user turn
         if role.lower() == "user":
             txt = content.strip()
+            try:
+                from core.language_detector import detect_language
+                self._active_language = detect_language(txt)
+            except Exception:
+                pass
             # If not a short hint, update the active topic
             if not self.is_elliptical_hint(txt):
                 self._last_topic = txt

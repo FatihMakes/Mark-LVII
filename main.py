@@ -1196,18 +1196,70 @@ class JarvisLive:
 
     def _on_ui_mute_change(self, muted: bool):
         """Microphone muted or unmuted from UI controls or shortcuts."""
+        now = time.monotonic()
         if not muted:
+            muted_duration = now - getattr(self, "_muted_at", now)
+            self._muted_at = 0.0
             self._interrupted = False
             self._awake = True
-            self._last_user_speech = time.monotonic()
-            self.ui.set_state("LISTENING")
-            print("[JARVIS] 🎤 Mic unmuted — resumed listening immediately.")
+            self._last_user_speech = now
+            print(f"[JARVIS] 🎤 Mic unmuted (was muted for {muted_duration:.1f}s).")
+
+            # 1. Drain any stale audio from output & input queues
+            if self.out_queue:
+                drained = 0
+                while not self.out_queue.empty():
+                    try:
+                        self.out_queue.get_nowait()
+                        drained += 1
+                    except Exception:
+                        break
+                if drained > 0:
+                    print(f"[JARVIS] 🧹 Drained {drained} stale chunks from out_queue.")
+
+            if self.audio_in_queue:
+                while not self.audio_in_queue.empty():
+                    try:
+                        self.audio_in_queue.get_nowait()
+                    except Exception:
+                        break
+
+            # 2. Reset voice match and turn accumulator buffers
+            if hasattr(self, "_voice_match_buf"):
+                self._voice_match_buf.clear()
+            self._user_in_accumulator = ""
+
+            # 3. Assess session health
+            session_dead = False
             if self.session is None:
-                self._conn_backoff = 1
-                self.request_reconnect(keep_context=True, reason="unmuted")
+                session_dead = True
+            else:
+                ws = getattr(self.session, "_ws", None)
+                if ws is not None and getattr(ws, "closed", False) is True:
+                    session_dead = True
+                send_t = getattr(self, "_send_task", None)
+                recv_t = getattr(self, "_recv_task", None)
+                if (send_t and send_t.done() is True) or (recv_t and recv_t.done() is True):
+                    session_dead = True
+
+            # If muted for a long time (>= 20s) or session died while idle:
+            if muted_duration >= 20.0 or session_dead:
+                print(f"[JARVIS] 🔄 Session refreshed after long mute ({muted_duration:.1f}s) — context preserved.")
+                self.ui.set_state("LISTENING")
+                self._conn_backoff = 0
+                self.request_reconnect(keep_context=True, reason="unmuted after idle")
+            else:
+                self.ui.set_state("LISTENING")
         else:
+            self._muted_at = now
             print("[JARVIS] 🔇 Mic muted.")
             self.interrupt()
+            if self.audio_in_queue:
+                while not self.audio_in_queue.empty():
+                    try:
+                        self.audio_in_queue.get_nowait()
+                    except Exception:
+                        break
 
     def _on_audio_device_change(self):
         """Microphone or speaker changed. Both streams are opened inside the
@@ -1541,11 +1593,22 @@ class JarvisLive:
             "- Never engage in self-talk, echo loops, or reply to your own voice or timer alerts.\n"
             "- Never hallucinate or claim you performed an action without the corresponding tool having run.\n\n"
         )
+        language_directive_ctx = (
+            "[CRITICAL: DYNAMIC MULTILINGUAL MIRRORING & TURN-BY-TURN LANGUAGE DIRECTIVE]\n"
+            "- CRITICAL: Dynamically detect and mirror the language spoken by the user in their MOST RECENT utterance.\n"
+            "- If the user speaks in English -> You MUST formulate and speak your response entirely in English.\n"
+            "- If the user speaks in Hindi -> You MUST formulate and speak your response entirely in Hindi.\n"
+            "- If the user speaks in Hinglish (conversational Hindi written in Roman/Latin script) -> You MUST formulate and speak your response in natural Hinglish.\n"
+            "- When the user switches languages between turns (e.g. from English to Hindi or vice versa), IMMEDIATELY switch your response language to match their new language.\n"
+            "- NEVER get stuck in Hindi when the user speaks English. NEVER get stuck in English when the user speaks Hindi.\n"
+            "- Turn-by-turn language fidelity is mandatory.\n\n"
+        )
         identity_ctx = (
             f"[IDENTITY]\n"
             f"Your name is {self._asst_name}. "
             f"Always refer to yourself as {self._asst_name}.\n"
             f"{_addr}\n\n"
+            f"{language_directive_ctx}"
             f"{anti_hallucination_ctx}"
         )
 
@@ -1908,9 +1971,13 @@ class JarvisLive:
         _sched = (self._action_registry.scheduling(name)
                   or self._plugin_registry.scheduling(name))
         _extra = {"scheduling": _sched} if _sched else {}
+        active_lang = getattr(self, "_active_user_language", "ENGLISH")
         return types.FunctionResponse(
             id=fc.id, name=name,
-            response={"result": result},
+            response={
+                "result": result,
+                "language_instruction": f"Answer in {active_lang} matching user's current utterance."
+            },
             **_extra
         )
 
@@ -1920,20 +1987,34 @@ class JarvisLive:
                 msg = await self.out_queue.get()
                 if not self.session:
                     break
-                await self.session.send_realtime_input(
-                    audio=types.Blob(
-                        data=msg["data"],
-                        mime_type=msg.get("mime_type", "audio/pcm"),
+                try:
+                    await self.session.send_realtime_input(
+                        audio=types.Blob(
+                            data=msg["data"],
+                            mime_type=msg.get("mime_type", "audio/pcm"),
+                        )
                     )
-                )
-        except (websockets.exceptions.ConnectionClosed, asyncio.CancelledError):
-            pass
+                except Exception as send_err:
+                    err_s = str(send_err).lower()
+                    if "closed" in err_s or "broken pipe" in err_s or "connection" in err_s or "1008" in err_s:
+                        print(f"[JARVIS] 🔌 Send socket dropped: {send_err} — requesting reconnect")
+                        self.request_reconnect(keep_context=True, reason="send socket closed")
+                        raise _ReconnectSignal(keep_context=True)
+                    raise
+        except (websockets.exceptions.ConnectionClosed, asyncio.CancelledError) as e:
+            print(f"[JARVIS] 🔌 send_realtime closed: {e}")
+            self.request_reconnect(keep_context=True, reason="send connection closed")
+            raise _ReconnectSignal(keep_context=True)
+        except _ReconnectSignal:
+            raise
         except Exception as e:
             err_m = str(e).lower()
             if "closed" in err_m or "goaway" in err_m or "1008" in err_m or "broken pipe" in err_m:
-                pass
-            else:
-                print(f"[JARVIS] ⚠️ send_realtime ended: {e}")
+                self.request_reconnect(keep_context=True, reason="send socket error")
+                raise _ReconnectSignal(keep_context=True)
+            print(f"[JARVIS] ⚠️ send_realtime error: {e}")
+            self.request_reconnect(keep_context=True, reason="send_realtime exception")
+            raise _ReconnectSignal(keep_context=True)
 
     async def _listen_audio(self):
         print("[JARVIS] 🎤 Mic started")
@@ -2056,10 +2137,18 @@ class JarvisLive:
 
             if not self.ui.muted and not self._phone_active:
                 data = indata.tobytes()
-                loop.call_soon_threadsafe(
-                    self.out_queue.put_nowait,
-                    {"data": data, "mime_type": "audio/pcm"}
-                )
+                def _safe_put_audio(d):
+                    if self.out_queue.full():
+                        try:
+                            self.out_queue.get_nowait()
+                        except Exception:
+                            pass
+                    try:
+                        self.out_queue.put_nowait({"data": d, "mime_type": "audio/pcm"})
+                    except Exception:
+                        pass
+                loop.call_soon_threadsafe(_safe_put_audio, data)
+
                 # Feed the live mic level to the HUD so the waveform reacts to
                 # the user's actual voice while listening. Purely cosmetic — any
                 # failure here must never disturb the mic.
@@ -2068,15 +2157,18 @@ class JarvisLive:
                 except Exception:
                     pass
             elif self.ui.muted and not self._phone_active:
-                # Keepalive: send zero-amplitude PCM silence every ~1.5s to keep Gemini Live WebSocket alive
+                # Keepalive: send zero-amplitude PCM silence every ~2.0s to keep Gemini Live WebSocket alive
                 _now = time.monotonic()
-                if _now - getattr(self, "_last_mute_keepalive", 0.0) >= 1.5:
+                if _now - getattr(self, "_last_mute_keepalive", 0.0) >= 2.0:
                     self._last_mute_keepalive = _now
-                    silence = np.zeros(int(SEND_SAMPLE_RATE * 0.08), dtype=np.int16).tobytes()
-                    loop.call_soon_threadsafe(
-                        self.out_queue.put_nowait,
-                        {"data": silence, "mime_type": "audio/pcm"}
-                    )
+                    silence = np.zeros(int(SEND_SAMPLE_RATE * 0.04), dtype=np.int16).tobytes()
+                    def _safe_put_silence(s):
+                        if not self.out_queue.full():
+                            try:
+                                self.out_queue.put_nowait({"data": s, "mime_type": "audio/pcm"})
+                            except Exception:
+                                pass
+                    loop.call_soon_threadsafe(_safe_put_silence, silence)
 
         try:
             def _open_mic(dev):
@@ -2279,6 +2371,13 @@ class JarvisLive:
                                 try:
                                     from core.context_resolver import get_context_resolver
                                     get_context_resolver().record_turn("user", full_in)
+                                except Exception:
+                                    pass
+                                try:
+                                    from core.language_detector import detect_language
+                                    user_lang = detect_language(full_in)
+                                    self._active_user_language = user_lang
+                                    print(f"[JARVIS] 🌐 Detected speaker language: {user_lang}")
                                 except Exception:
                                     pass
                                 if self._dashboard:
@@ -2545,9 +2644,11 @@ class JarvisLive:
         # The briefing fires before the user has said anything, so the
         # remembered language is the only signal there is. It is a starting
         # point, not a setting: the moment they reply, their language wins.
-        lang_clause = (f" Speak this greeting in {lang}, then follow the "
-                       f"user's own language from their first reply onward."
-                       if lang else "")
+        if not lang or "dynamic" in lang.lower():
+            lang_clause = " Speak this greeting in crisp English or conversational Hindi/Hinglish (e.g. 'Good morning Sir, JARVIS is online. How can I help you?'), then strictly follow and mirror the user's chosen language from their first reply onward."
+        else:
+            lang_clause = (f" Speak this greeting in {lang}, then strictly follow and mirror the "
+                           f"user's own language from their first reply onward.")
         name_clause = f" Address the user as {name}." if name else ""
 
         # Inject last session context if available — pop removes it so it's never repeated
@@ -2584,9 +2685,11 @@ class JarvisLive:
         # ── Phase 2: fire as soon as Phase 1 audio is done ───────────────────
         async def _deliver_news():
             try:
-                lang_str = (f" Speak in {lang} unless the user has since "
-                            f"spoken another language, in which case use theirs."
-                            if lang else "")
+                if not lang or "dynamic" in lang.lower():
+                    lang_str = " Speak in crisp English or conversational Hindi/Hinglish, matching the user's latest message."
+                else:
+                    lang_str = (f" Speak in {lang} unless the user has since "
+                                f"spoken another language, in which case use theirs.")
 
                 # Wait for news fetch (already running) and Phase 1 turn-complete
                 # in parallel — whichever takes longer determines the wait time
@@ -3155,12 +3258,12 @@ class JarvisLive:
                         await self._dashboard.broadcast({"type": "status", "state": "active"})
 
                     self._reconnect_event.clear()  # ignore requests from before this session
-                    tg.create_task(self._watch_reconnect())
-                    tg.create_task(self._watch_stall())
-                    tg.create_task(self._send_realtime())
-                    tg.create_task(self._listen_audio())
-                    tg.create_task(self._receive_audio())
-                    tg.create_task(self._play_audio())
+                    self._watch_reconnect_task = tg.create_task(self._watch_reconnect())
+                    self._stall_task = tg.create_task(self._watch_stall())
+                    self._send_task = tg.create_task(self._send_realtime())
+                    self._listen_task = tg.create_task(self._listen_audio())
+                    self._recv_task = tg.create_task(self._receive_audio())
+                    self._play_task = tg.create_task(self._play_audio())
                     tg.create_task(self._run_system_monitor())
                     if self._routines is None:
                         # Routines did not load: the fixed schedules they replaced.
